@@ -74,4 +74,6 @@ source "drivers/crypto/Kconfig.ataes132a"
 source "drivers/crypto/Kconfig.stm32"
 source "drivers/crypto/Kconfig.nrf_ecb"
 
+source "drivers/crypto/optiga/Kconfig"
+
 endif # CRYPTO

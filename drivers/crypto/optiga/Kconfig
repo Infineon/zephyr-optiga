@@ -1,0 +1,13 @@
+# Kconfig - OPTIGA stack configuration options
+
+#
+# Copyright (c) 2019 Infineon Technologies AG
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig OPTIGA
+	bool "OPTIGA security controller"
+	depends on I2C && HAS_DTS_I2C && GPIO
+	help
+	  Enable driver for OPTIGA security controller.

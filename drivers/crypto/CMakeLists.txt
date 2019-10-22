@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
+# SPDX-License-Identifier: Apache-2.0
+
 zephyr_library()
+add_subdirectory_ifdef(CONFIG_OPTIGA		optiga)
 zephyr_library_sources_ifdef(CONFIG_CRYPTO_TINYCRYPT_SHIM	crypto_tc_shim.c)
 zephyr_library_sources_ifdef(CONFIG_CRYPTO_ATAES132A		crypto_ataes132a.c)
 zephyr_library_sources_ifdef(CONFIG_CRYPTO_MBEDTLS_SHIM		crypto_mtls_shim.c)
