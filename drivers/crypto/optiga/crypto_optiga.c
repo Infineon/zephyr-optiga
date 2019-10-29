@@ -11,6 +11,7 @@
 #include <zephyr.h>
 
 #include "crypto_optiga.h"
+#include "optiga_phy.h"
 
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
@@ -25,56 +26,6 @@ struct dummy_api {
 static const struct dummy_api dummy_funcs = {
 	.dummy = NULL,
 };
-
-struct optiga_cfg {
-	char *i2c_dev_name;
-	u16_t i2c_addr;
-};
-
-int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
-{
-	struct optiga_data *driver = dev->driver_data;
-	const struct optiga_cfg *config = dev->config->config_info;
-
-	// select register for write
-	bool acked = false;
-	int res = 0;
-	int i = 0;
-	for(i = 0; i < 5; i++) {
-		res = i2c_write(driver->i2c_master, &addr, sizeof(addr), config->i2c_addr);
-		if (res == 0) {
-			acked = true;
-			break;
-		}
-		k_sleep(10);
-	}
-
-	if (!acked) {
-		LOG_DBG("No ACK for register address received");
-		return -EIO;
-	}
-
-	LOG_DBG("Reg ACK after %d tries", i);
-
-	acked = false;
-	for(i = 0; i < 5; i++) {
-		res = i2c_read(driver->i2c_master, data, len, config->i2c_addr);
-		if (res == 0) {
-			acked = true;
-			break;
-		}
-		k_sleep(10);
-	}
-
-	if (!acked) {
-		LOG_DBG("No ACK for read data received");
-		return -EIO;
-	}
-
-	LOG_DBG("Read ACK after %d tries", i);
-
-	return res;
-}
 
 int optiga_init(struct device *dev)
 {
