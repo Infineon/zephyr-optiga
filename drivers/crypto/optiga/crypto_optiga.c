@@ -40,6 +40,12 @@ int optiga_init(struct device *dev)
 		return -EINVAL;
 	}
 
+	int err = optiga_phy_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA phy layer");
+		return err;
+	}
+
 	return 0;
 }
 

@@ -19,17 +19,16 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_REG_ADDR_SOFT_RESET		0x88
 #define OPTIGA_REG_ADDR_I2C_MODE		0x89
 
-int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
+int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
 	const struct optiga_cfg *config = dev->config->config_info;
 
-	/* select register for read */
 	bool acked = false;
 	int res = 0;
 	int i = 0;
 	for(i = 0; i < 5; i++) {
-		res = i2c_write(driver->i2c_master, &addr, sizeof(addr), config->i2c_addr);
+		res = i2c_write(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
 			acked = true;
 			break;
@@ -38,17 +37,31 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	}
 
 	if (!acked) {
-		LOG_DBG("No ACK for register address received");
+		LOG_DBG("No ACK received");
 		return -EIO;
 	}
 
-	LOG_DBG("Reg ACK after %d tries", i);
+	LOG_DBG("ACK after %d tries", i);
+	return 0;
+}
+
+int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
+{
+	struct optiga_data *driver = dev->driver_data;
+	const struct optiga_cfg *config = dev->config->config_info;
+
+	/* select register for read */
+	int res = optiga_delayed_ack_write(dev, &addr, sizeof(addr));
+	if (res != 0) {
+		return res;
+	}
 
 	/* Guard time required by OPTIGA chip between I2C transactions */
 	k_busy_wait(50);
 
 	/* Read data */
-	acked = false;
+	bool acked = false;
+	int i = 0;
 	for(i = 0; i < 5; i++) {
 		res = i2c_read(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
@@ -71,7 +84,6 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
-	const struct optiga_cfg *config = dev->config->config_info;
 	u8_t *reg_write_buf = driver->phy.reg_write_buf;
 
 	if (len > (REG_WRITE_BUF_SIZE - 1)) {
@@ -83,56 +95,89 @@ int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len
 	reg_write_buf++;
 	memcpy(reg_write_buf, data, len);
 
-	bool acked = false;
-	int res = 0;
-	int i = 0;
-	for(i = 0; i < 5; i++) {
-		res = i2c_write(driver->i2c_master,  driver->phy.reg_write_buf, len + 1, config->i2c_addr);
-		if (res == 0) {
-			acked = true;
-			break;
-		}
-		k_sleep(10);
-	}
-
-	if (!acked) {
-		LOG_DBG("No ACK for write received");
-		return -EIO;
-	}
-
-	LOG_DBG("Write ACK after %d tries", i);
+	int res = optiga_delayed_ack_write(dev, driver->phy.reg_write_buf, len + 1);
 
 	return res;
 }
 
 /* Can not use optiga_reg_write because the send buffer might not be setup correctly */
 int optiga_soft_reset(struct device *dev) {
-	struct optiga_data *driver = dev->driver_data;
-	const struct optiga_cfg *config = dev->config->config_info;
 	static const u8_t reset_cmd[] = {OPTIGA_REG_ADDR_SOFT_RESET, 0x00, 0x00};
 
-	bool acked = false;
-	int res = 0;
-	int i = 0;
-	for(i = 0; i < 5; i++) {
-		res = i2c_write(driver->i2c_master,  reset_cmd, sizeof(reset_cmd), config->i2c_addr);
-		if (res == 0) {
-			acked = true;
-			break;
+	LOG_DBG("Performing soft reset");
+	return optiga_delayed_ack_write(dev, reset_cmd, sizeof(reset_cmd));
+}
+
+/* Can not use optiga_reg_write because the send buffer might not be setup correctly */
+int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len) {
+	const u8_t cmd[] = {OPTIGA_REG_ADDR_SOFT_RESET, data_reg_len >> 8, data_reg_len};
+
+	return optiga_delayed_ack_write(dev, cmd, sizeof(cmd));
+}
+
+int optiga_get_data_reg_len(struct device *dev, u16_t* data_reg_len) {
+	assert(data_reg_len != NULL);
+
+	u8_t raw[2] = {0};
+	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA_REG_LEN, raw, 2);
+	if (err != 0) {
+		LOG_DBG("Failed to read DATA_REG_LEN register");
+		return err;
+	}
+
+	*data_reg_len = ((u16_t)raw[0]) << 8 | raw[1];
+
+	return 0;
+}
+
+int optiga_negotiate_data_reg_len(struct device *dev) {
+	/* read the value from the device */
+	u16_t data_reg_len = 0;
+	int err = optiga_get_data_reg_len(dev, &data_reg_len);
+	if(err != 0) {
+		return err;
+	}
+
+	if (data_reg_len > DATA_REG_LEN) {
+		/* apply our maximum value */
+		err = optiga_set_data_reg_len(dev, DATA_REG_LEN);
+		if(err != 0) {
+			return err;
 		}
-		k_sleep(10);
+
+		/* read back, to ensure the value is correctly applied */
+		err = optiga_get_data_reg_len(dev, &data_reg_len);
+		if(err != 0) {
+			return err;
+		}
+
+		if (data_reg_len != DATA_REG_LEN) {
+			return -EINVAL;
+		}
+	} else if (data_reg_len < OPTIGA_DATA_REG_LEN_MIN) {
+		LOG_ERR("Received invalid DATA_REG_LEN");
+		return -EINVAL;
 	}
 
-	if (!acked) {
-		LOG_DBG("No ACK for soft reset cmd received");
-		return -EIO;
-	}
-
-	LOG_DBG("Soft reset ACK after %d tries", i);
-
-	return res;
+	struct optiga_data *driver = dev->driver_data;
+	driver->phy.data_reg_len = data_reg_len;
+	LOG_DBG("Negotiated DATA_REG_LEN: %d", data_reg_len);
+	return 0;
 }
 
 int optiga_phy_init(struct device *dev) {
+	/* bring the device to a known state */
+	int err = optiga_soft_reset(dev);
+	if (err != 0) {
+		LOG_ERR("Failed to perform soft reset");
+		return err;
+	}
 
+	err = optiga_negotiate_data_reg_len(dev);
+	if (err != 0) {
+		LOG_ERR("Failed to negotiate DATA_REG_LEN");
+		return err;
+	}
+
+	return 0;
 }
