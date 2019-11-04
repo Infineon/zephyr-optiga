@@ -223,3 +223,35 @@ int optiga_phy_init(struct device *dev) {
 
 	return 0;
 }
+
+int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len) {
+	assert(data);
+	assert(len);
+
+	uint16_t read_len = 0;
+	int err = optiga_get_i2c_state(dev, &read_len, NULL);
+	if (err != 0) {
+		LOG_ERR("Failed to get data length");
+		return err;
+	}
+
+	if (*len < read_len) {
+		LOG_ERR("Receive buffer too small");
+		return -ENOMEM;
+	}
+
+	err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA, data, read_len);
+	if (err != 0) {
+		LOG_DBG("Failed to read DATA register");
+		return err;
+	}
+
+	*len = read_len;
+	return 0;
+}
+
+int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len) {
+	assert(data);
+
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, data, len);
+}
