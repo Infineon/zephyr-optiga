@@ -19,6 +19,16 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_REG_ADDR_SOFT_RESET		0x88
 #define OPTIGA_REG_ADDR_I2C_MODE		0x89
 
+/* Flags in I2C_STATE from protocol specification Table 2-4 */
+enum {
+	OPTIGA_I2C_STATE_FLAG_BUSY = 0x80,
+	OPTIGA_I2C_STATE_FLAG_RESP_READY = 0x40,
+	OPTIGA_I2C_STATE_FLAG_SOFT_RESET = 0x08,
+	OPTIGA_I2C_STATE_FLAG_CONT_READ = 0x04,
+	OPTIGA_I2C_STATE_FLAG_REP_START = 0x02,
+	OPTIGA_I2C_STATE_FLAG_CLK_STRETCHING = 0x01
+};
+
 int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
@@ -165,6 +175,27 @@ int optiga_negotiate_data_reg_len(struct device *dev) {
 	return 0;
 }
 
+int optiga_get_i2c_state(struct device *dev, u16_t* read_len, u8_t* state_flags)
+{
+	u8_t raw[4] = {0};
+	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_I2C_STATE, raw, 4);
+	if (err != 0) {
+		LOG_DBG("Failed to read DATA_REG_LEN register");
+		return err;
+	}
+
+	/* Bits 16-23 are ignored because they are RFU */
+	if (read_len) {
+		*read_len = ((u16_t)raw[2]) << 8 | raw[3];
+	}
+
+	if (state_flags) {
+		*state_flags = raw[0];
+	}
+
+	return 0;
+}
+
 int optiga_phy_init(struct device *dev) {
 	/* bring the device to a known state */
 	int err = optiga_soft_reset(dev);
@@ -178,6 +209,17 @@ int optiga_phy_init(struct device *dev) {
 		LOG_ERR("Failed to negotiate DATA_REG_LEN");
 		return err;
 	}
+
+	/* print the state of the device */
+	uint16_t read_len = 0;
+	uint8_t flags = 0;
+	err = optiga_get_i2c_state(dev, &read_len, &flags);
+	if (err != 0) {
+		LOG_ERR("Failed to read I2C_STATE");
+		return err;
+	}
+
+	LOG_DBG("Read len: %d, state flags: 0x%02x", read_len, flags);
 
 	return 0;
 }
