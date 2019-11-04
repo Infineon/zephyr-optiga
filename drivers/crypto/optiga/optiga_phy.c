@@ -224,7 +224,8 @@ int optiga_phy_init(struct device *dev) {
 	return 0;
 }
 
-int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len) {
+int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len)
+{
 	assert(data);
 	assert(len);
 
@@ -250,8 +251,18 @@ int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len) {
 	return 0;
 }
 
-int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len) {
+int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len)
+{
 	assert(data);
 
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, data, len);
+}
+
+u16_t optiga_phy_get_data_reg_len(struct device *dev)
+{
+	/*
+	struct optiga_data *driver = dev->driver_data;
+	return driver->phy.data_reg_len;
+	*/
+	return 20;
 }

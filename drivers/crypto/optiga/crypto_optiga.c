@@ -46,6 +46,12 @@ int optiga_init(struct device *dev)
 		return err;
 	}
 
+	err = optiga_data_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA data link layer");
+		return err;
+	}
+
 	return 0;
 }
 

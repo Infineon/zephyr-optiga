@@ -11,22 +11,13 @@
 #include <kernel.h>
 #include <drivers/i2c.h>
 
-// TODO: make configurable via Kconfig
-// This is a device limit, currently from the OPTIGA Trust X datasheet
-#define MAX_PACKET_SIZE 0x110
-
-/*
- * 1 byte  FCTR
- * 2 bytes LEN
- * 2 bytes FCS
- */
-#define DL_OVERHEAD 5
+#include "optiga_data.h"
 
 // This are the protocol limits from Table 2-1
 #define OPTIGA_DATA_REG_LEN_MAX 0xFFFF
 #define OPTIGA_DATA_REG_LEN_MIN 0x10
 
-#define DATA_REG_LEN (MAX_PACKET_SIZE + 5)
+#define DATA_REG_LEN (MAX_PACKET_SIZE + DATA_LINK_OVERHEAD)
 
 #if DATA_REG_LEN < OPTIGA_DATA_REG_LEN_MIN || DATA_REG_LEN > OPTIGA_DATA_REG_LEN_MAX
 #error "DATA_REG_LEN outside protocol limits"
@@ -44,5 +35,9 @@ struct physical_layer {
 
 int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len);
 int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len);
+u16_t optiga_phy_get_data_reg_len(struct device *dev);
+int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len);
+int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len);
+int optiga_phy_init(struct device *dev);
 
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PHY_H_ */

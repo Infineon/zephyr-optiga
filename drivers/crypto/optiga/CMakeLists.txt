@@ -2,3 +2,4 @@
 
 zephyr_library_sources_ifdef(CONFIG_OPTIGA	crypto_optiga.c)
 zephyr_library_sources_ifdef(CONFIG_OPTIGA	optiga_phy.c)
+zephyr_library_sources_ifdef(CONFIG_OPTIGA	optiga_data.c)

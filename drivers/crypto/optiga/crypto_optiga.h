@@ -8,10 +8,12 @@
 #define ZEPHYR_DRIVERS_CRYPTO_OPTIGA_CRYPTO_OPTIGA_H_
 
 #include "optiga_phy.h"
+#include "optiga_data.h"
 
 struct optiga_data {
 	struct device *i2c_master;
 	struct physical_layer phy;
+	struct data_link_layer data;
 };
 
 struct optiga_cfg {
