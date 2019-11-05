@@ -19,16 +19,6 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_REG_ADDR_SOFT_RESET		0x88
 #define OPTIGA_REG_ADDR_I2C_MODE		0x89
 
-/* Flags in I2C_STATE from protocol specification Table 2-4 */
-enum {
-	OPTIGA_I2C_STATE_FLAG_BUSY = 0x80,
-	OPTIGA_I2C_STATE_FLAG_RESP_READY = 0x40,
-	OPTIGA_I2C_STATE_FLAG_SOFT_RESET = 0x08,
-	OPTIGA_I2C_STATE_FLAG_CONT_READ = 0x04,
-	OPTIGA_I2C_STATE_FLAG_REP_START = 0x02,
-	OPTIGA_I2C_STATE_FLAG_CLK_STRETCHING = 0x01
-};
-
 int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
@@ -224,13 +214,13 @@ int optiga_phy_init(struct device *dev) {
 	return 0;
 }
 
-int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len)
+int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flags)
 {
 	assert(data);
 	assert(len);
 
 	uint16_t read_len = 0;
-	int err = optiga_get_i2c_state(dev, &read_len, NULL);
+	int err = optiga_get_i2c_state(dev, &read_len, flags);
 	if (err != 0) {
 		LOG_ERR("Failed to get data length");
 		return err;

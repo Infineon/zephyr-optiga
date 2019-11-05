@@ -26,6 +26,9 @@
 struct data_link_layer {
 	size_t frame_len;
 	u8_t frame_buf[MAX_PACKET_SIZE + DATA_LINK_OVERHEAD];
+	u8_t frame_nr;
+	u8_t frame_ack;
+	u8_t retry_cnt;
 };
 
 int optiga_data_init(struct device *dev);

@@ -33,11 +33,22 @@ struct physical_layer {
 	u8_t reg_write_buf[REG_WRITE_BUF_SIZE];
 };
 
+/* Flags in I2C_STATE from protocol specification Table 2-4 */
+enum {
+	OPTIGA_I2C_STATE_FLAG_BUSY = 0x80,
+	OPTIGA_I2C_STATE_FLAG_RESP_READY = 0x40,
+	OPTIGA_I2C_STATE_FLAG_SOFT_RESET = 0x08,
+	OPTIGA_I2C_STATE_FLAG_CONT_READ = 0x04,
+	OPTIGA_I2C_STATE_FLAG_REP_START = 0x02,
+	OPTIGA_I2C_STATE_FLAG_CLK_STRETCHING = 0x01
+};
+
 int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len);
 int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len);
 u16_t optiga_phy_get_data_reg_len(struct device *dev);
 int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len);
-int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len);
+int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flags);
 int optiga_phy_init(struct device *dev);
+int optiga_get_i2c_state(struct device *dev, u16_t* read_len, u8_t* state_flags);
 
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PHY_H_ */
