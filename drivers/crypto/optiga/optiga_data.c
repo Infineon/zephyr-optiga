@@ -153,7 +153,7 @@ int optiga_data_init(struct device *dev)
 /* send a packet with the correct framing */
 int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
 {
-	if((len + DATA_LINK_OVERHEAD) + optiga_phy_get_data_reg_len(dev)) {
+	if((len + DATA_LINK_OVERHEAD) > optiga_phy_get_data_reg_len(dev)) {
 		LOG_ERR("Packet too big");
 		return -EINVAL;
 	}
