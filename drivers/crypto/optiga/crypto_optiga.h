@@ -9,11 +9,13 @@
 
 #include "optiga_phy.h"
 #include "optiga_data.h"
+#include "optiga_nettran.h"
 
 struct optiga_data {
 	struct device *i2c_master;
 	struct physical_layer phy;
 	struct data_link_layer data;
+	struct nettran_layer nettran;
 };
 
 struct optiga_cfg {

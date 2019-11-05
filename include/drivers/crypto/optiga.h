@@ -18,5 +18,6 @@
 int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len);
 int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len);
 int optiga_soft_reset(struct device *dev);
+int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len);
 
 #endif /* ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_H_ */

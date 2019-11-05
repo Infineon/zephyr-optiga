@@ -134,6 +134,10 @@ int optiga_send_sync_frame(struct device *dev)
 int optiga_data_init(struct device *dev)
 {
 	/* Bring to a known state */
+	/* TODO: Sending a sync frame causes the OPTIGA to respond with some frame,
+	 * need to investigate what type of frame and how to handle it.
+	 * This seems to be undocumented behavior AFAICT.
+	 */
 	int err = optiga_send_sync_frame(dev);
 	if (err != 0) {
 		LOG_ERR("Failed to send sync frame");
@@ -272,6 +276,13 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 	memmove(data, &data[OPTIGA_DATA_PACKET_START_OFFSET], frame_len);
 	*data_len = frame_len;
 	return 0;
+}
+
+u16_t optiga_data_get_max_packet_size(struct device *dev)
+{
+	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
+	assert(data_reg_len > DATA_LINK_OVERHEAD);
+	return data_reg_len - DATA_LINK_OVERHEAD;
 }
 
 
