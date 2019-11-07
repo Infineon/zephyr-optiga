@@ -31,5 +31,6 @@ struct data_link_layer {
 int optiga_data_init(struct device *dev);
 u16_t optiga_data_get_max_packet_size(struct device *dev);
 int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len);
+int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len);
 
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_DATA_H_ */

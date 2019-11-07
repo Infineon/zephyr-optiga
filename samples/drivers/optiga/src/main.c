@@ -45,11 +45,32 @@ void main(void)
 		0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
 	};
 
-	/*
 	res = optiga_nettran_send_apdu(dev, optiga_open_application_apdu, sizeof(optiga_open_application_apdu));
 
 	LOG_INF("APDU send result: %d", res);
-	*/
+	k_sleep(500);
+
+	res = optiga_reg_read(dev, 0x82, status_reg, 4);
+
+	if (res != 0) {
+		LOG_INF("Failed to read status register");
+		return;
+	}
+
+	LOG_HEXDUMP_INF(status_reg, 4, "Read status register:");
+
+	u8_t tmp_buf[100] = {0};
+	size_t tmp_buf_len = 100;
+
+	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (res != 0) {
+		LOG_INF("Failed to read APDU response");
+		return;
+	}
+
+	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Open Application response:");
+
+	return;
 
 	while(true) {
 		res = optiga_reg_read(dev, 0x82, status_reg, 4);
@@ -110,4 +131,11 @@ void main(void)
 	}
 
 	LOG_HEXDUMP_INF(data_reg_len_reg, 2, "Read data reg len:");
+
+	/* Test case for FCS */
+	u8_t fcs_test_vec[] = {0xa0, 0x00, 0x00};
+	u8_t fcs_test_res[] = {0x0f, 0xd7};
+	u8_t fcs_test_vec2[] = {0xa0, 0x00, 0x00, 0x00, 0x00};
+	optiga_data_frame_set_fcs(fcs_test_vec2, 3);
+	/* End test case for FCS */
 }

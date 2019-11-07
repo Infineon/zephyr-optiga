@@ -28,7 +28,13 @@ int optiga_nettran_init(struct device *dev) {
 
 void optiga_nettran_set_chain(u8_t *frame_start, enum OPTIGA_NETTRAN_PCTR_CHAIN chain_mode)
 {
-	frame_start[0] = (frame_start[0] & ~OPTIGA_NETTRAN_PCTR_CHAIN_MASK) | chain_mode;
+	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] =
+		(frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_CHAIN_MASK) | chain_mode;
+}
+
+u8_t optiga_nettran_get_chain(u8_t *frame_start)
+{
+	return frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & OPTIGA_NETTRAN_PCTR_CHAIN_MASK;
 }
 
 int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
@@ -53,4 +59,35 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 
 	/* hand over to lower layer */
 	return optiga_data_send_packet(dev, packet_buf, len + OPTIGA_NETTRAN_PCTR_LEN);
+}
+
+int optiga_nettran_recv_apdu(struct device *dev, const u8_t *data, size_t *len)
+{
+	assert(data);
+	assert(len);
+
+	/* TODO: receive buffer must provide space for data + header */
+	int res = optiga_data_recv_frame(dev, data, len);
+	if (res != 0) {
+		LOG_ERR("Failed to read DATA");
+		return res;
+	}
+
+	u8_t chain = optiga_nettran_get_chain(data);
+	if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_ERROR) {
+		LOG_ERR("Chaining error, need to re-init");
+		return -EIO;
+	}
+
+	/* TODO: implement chaining */
+	assert(chain == OPTIGA_NETTRAN_PCTR_CHAIN_NONE);
+
+	/* Ensure there are enough bytes for header + data */
+	assert(*len >= OPTIGA_NETTRAN_PACKET_OFFSET);
+
+	/* remove Header */
+	*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+	memmove(data, data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+
+	return 0;
 }
