@@ -62,7 +62,7 @@ u16_t optiga_data_frame_calc_fcs(u8_t *frame_start, size_t len)
 	/* Initial seed is 0 */
 	u16_t fcs = 0;
 	for(size_t i = 0; i < len; i++) {
-		optiga_data_calc_fcs_core(fcs, frame_start[i]);
+		fcs = optiga_data_calc_fcs_core(fcs, frame_start[i]);
 	}
 
 	return fcs;
@@ -114,8 +114,8 @@ void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
 {
 	u16_t fcs = optiga_data_frame_calc_fcs(frame_start, len);
 	/* Chapter 3.3 says, order of FCS is: Low Byte || High Byte */
-	frame_start[len] = fcs;
-	frame_start[len + 1] = fcs >> 8;
+	frame_start[len] = fcs >> 8;
+	frame_start[len + 1] = fcs;
 }
 
 int optiga_send_sync_frame(struct device *dev)
