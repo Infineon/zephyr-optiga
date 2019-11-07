@@ -131,33 +131,11 @@ int optiga_send_sync_frame(struct device *dev)
 	return optiga_phy_write_data(dev, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
 }
 
-int optiga_data_init(struct device *dev)
-{
-	/* Bring to a known state */
-	/* TODO: Sending a sync frame causes the OPTIGA to respond with some frame,
-	 * need to investigate what type of frame and how to handle it.
-	 * This seems to be undocumented behavior AFAICT.
-	 */
-	int err = optiga_send_sync_frame(dev);
-	if (err != 0) {
-		LOG_ERR("Failed to send sync frame");
-		return err;
-	}
-
-	struct optiga_data *driver = dev->driver_data;
-	driver->data.frame_nr = 0;
-	driver->data.frame_ack = 0;
-	driver->data.retry_cnt = 0;
-
-	LOG_DBG("Data Link init successful");
-
-	return 0;
-}
-
 /* send a packet with the correct framing */
 int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
 {
-	if((len + DATA_LINK_OVERHEAD) > optiga_phy_get_data_reg_len(dev)) {
+	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
+	if((len + DATA_LINK_OVERHEAD) > data_reg_len) {
 		LOG_ERR("Packet too big");
 		return -EINVAL;
 	}
@@ -205,6 +183,7 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
 int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 {
 	u8_t flags = 0;
+	/* TODO: The receive buffer does not take into account the headers */
 	int err = optiga_phy_read_data(dev, data, data_len, &flags);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
@@ -283,6 +262,25 @@ u16_t optiga_data_get_max_packet_size(struct device *dev)
 	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
 	assert(data_reg_len > DATA_LINK_OVERHEAD);
 	return data_reg_len - DATA_LINK_OVERHEAD;
+}
+
+int optiga_data_init(struct device *dev)
+{
+	/* Bring to a known state */
+	int err = optiga_send_sync_frame(dev);
+	if (err != 0) {
+		LOG_ERR("Failed to send sync frame");
+		return err;
+	}
+
+	struct optiga_data *driver = dev->driver_data;
+	driver->data.frame_nr = 0;
+	driver->data.frame_ack = 0;
+	driver->data.retry_cnt = 0;
+
+	LOG_DBG("Data Link init successful");
+
+	return 0;
 }
 
 
