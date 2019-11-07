@@ -47,6 +47,11 @@ int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 
 int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 {
+	if (len == 0) {
+		LOG_WRN("Can't read 0 bytes");
+		return -EINVAL;
+	}
+
 	struct optiga_data *driver = dev->driver_data;
 	const struct optiga_cfg *config = dev->config->config_info;
 
@@ -250,9 +255,6 @@ int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len)
 
 u16_t optiga_phy_get_data_reg_len(struct device *dev)
 {
-	/*
 	struct optiga_data *driver = dev->driver_data;
 	return driver->phy.data_reg_len;
-	*/
-	return 20;
 }
