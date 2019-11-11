@@ -2,8 +2,6 @@
 #include "optiga_phy.h"
 #include "optiga_data.h"
 
-#include <drivers/i2c.h>
-
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga_data);
@@ -42,6 +40,8 @@ enum {
 
 #define OPTIG_DATA_FRAME_POLL_TIME_MS 10
 #define OPTIG_DATA_FRAME_RETRY_CNT 3
+
+#define DATA_LINK_OVERHEAD (OPTIGA_DATA_HEADER_LEN + OPTIGA_DATA_TRAILER_LEN)
 
 /*
  * Inner function of the FCS, initial seed is 0

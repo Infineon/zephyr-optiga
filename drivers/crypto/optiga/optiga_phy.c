@@ -91,7 +91,7 @@ int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len
 	struct optiga_data *driver = dev->driver_data;
 	u8_t *reg_write_buf = driver->phy.reg_write_buf;
 
-	if (len > (REG_WRITE_BUF_SIZE - 1)) {
+	if (len > (CONFIG_OPTIGA_HOST_BUFFER_SIZE - 1)) {
 		LOG_DBG("Not enough memory for write buffer");
 		return -ENOMEM;
 	}

@@ -7,7 +7,6 @@
 #include <drivers/gpio.h>
 #include <drivers/i2c.h>
 #include <kernel.h>
-#include <sys/byteorder.h>
 #include <zephyr.h>
 
 #include "crypto_optiga.h"

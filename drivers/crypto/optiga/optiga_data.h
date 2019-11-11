@@ -7,22 +7,24 @@
 #ifndef ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_DATA_H_
 #define ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_DATA_H_
 
-#include <zephyr.h>
-#include <kernel.h>
-#include <drivers/i2c.h>
+#include <device.h>
 
-#include "optiga_nettran.h"
+#include "optiga_phy.h"
 
 /*
  * 1 byte  FCTR
  * 2 bytes LEN
- * 2 bytes FCS
  */
-#define DATA_LINK_OVERHEAD 5
+#define OPTIGA_DATA_HEADER_LEN 3
+
+/* 2 bytes FCS */
+#define OPTIGA_DATA_TRAILER_LEN 2
+
+#define OPTIGA_DATA_BUF_SIZE (OPTIGA_PHY_BUF_SIZE - OPTIGA_DATA_HEADER_LEN - OPTIGA_DATA_TRAILER_LEN)
 
 struct data_link_layer {
 	size_t frame_len;
-	u8_t frame_buf[MAX_PACKET_SIZE + DATA_LINK_OVERHEAD];
+	u8_t frame_buf[OPTIGA_PHY_BUF_SIZE];
 	u8_t frame_nr;
 	u8_t frame_ack;
 	u8_t retry_cnt;

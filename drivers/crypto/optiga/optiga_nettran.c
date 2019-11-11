@@ -2,8 +2,6 @@
 #include "crypto_optiga.h"
 #include "optiga_data.h"
 
-#include <drivers/i2c.h>
-
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga_nettran);
@@ -21,6 +19,8 @@ enum OPTIGA_NETTRAN_PCTR_CHAIN {
 	OPTIGA_NETTRAN_PCTR_CHAIN_LAST = 0x04,
 	OPTIGA_NETTRAN_PCTR_CHAIN_ERROR = 0x07
 };
+
+#define OPTIGA_NETTRAN_OVERHEAD OPTIGA_NETTRAN_HEADER_LEN
 
 int optiga_nettran_init(struct device *dev) {
 	return 0;
@@ -61,7 +61,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	return optiga_data_send_packet(dev, packet_buf, len + OPTIGA_NETTRAN_PCTR_LEN);
 }
 
-int optiga_nettran_recv_apdu(struct device *dev, const u8_t *data, size_t *len)
+int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 {
 	assert(data);
 	assert(len);

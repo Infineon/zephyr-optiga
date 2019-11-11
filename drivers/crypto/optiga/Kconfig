@@ -11,3 +11,17 @@ menuconfig OPTIGA
 	depends on I2C && HAS_DTS_I2C && GPIO
 	help
 	  Enable driver for OPTIGA security controller.
+
+if OPTIGA
+
+config OPTIGA_HOST_BUFFER_SIZE
+    int "Buffer size for communication with OPTIGA"
+	range 17 655356
+    default 278
+	help
+		This value should be set as MAX_PACKET_SIZE + 6 from the solution
+		reference manual.
+	  
+		It can be set lower to trade performance for RAM.
+
+endif # OPTIGA
