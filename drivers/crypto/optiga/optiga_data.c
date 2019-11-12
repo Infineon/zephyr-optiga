@@ -106,7 +106,7 @@ void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8
 	assert(!(frame_nr & 0xf3));
 	assert(!(frame_ack & 0xfc));
 
-	frame_start[OPTIGA_DATA_FCTR_OFFSET] = flags | frame_nr | frame_ack;
+	frame_start[OPTIGA_DATA_FCTR_OFFSET] = flags | frame_nr << 2 | frame_ack;
 }
 
 /* len is the size of the frame header + packet data */
@@ -166,7 +166,7 @@ u8_t optiga_data_get_seqctr(const u8_t *frame_start) {
 }
 
 u8_t optiga_data_get_frame_nr(const u8_t *frame_start) {
-	return frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_FRNR_MASK >> 2;
+	return (frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_FRNR_MASK) >> 2;
 }
 
 u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
