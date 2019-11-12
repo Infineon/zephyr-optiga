@@ -57,7 +57,7 @@ u16_t optiga_data_calc_fcs_core(u16_t seed, u8_t c)
 	return (((((h3 << 1) ^ h4) << 4) ^ h2) << 3) ^ h4 ^ (seed >> 8);
 }
 
-u16_t optiga_data_frame_calc_fcs(u8_t *frame_start, size_t len)
+u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
 {
 	/* Initial seed is 0 */
 	u16_t fcs = 0;
@@ -72,7 +72,7 @@ u16_t optiga_data_frame_calc_fcs(u8_t *frame_start, size_t len)
  * param len is the number of bytes including the FCS
  * retval true if the FCS is correct, false else
  */
-bool optiga_data_frame_check_fcs(u8_t *frame_start, size_t len)
+bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
 {
 	if (len < OPTIGA_DATA_FCS_LEN) {
 		LOG_DBG("Not enough bytes");
@@ -80,8 +80,8 @@ bool optiga_data_frame_check_fcs(u8_t *frame_start, size_t len)
 	}
 
 	u16_t calc_fcs = optiga_data_frame_calc_fcs(frame_start, len - 2);
-	u16_t recv_fcs = frame_start[len - 2];
-	recv_fcs = frame_start[len - 1] << 8;
+	u16_t recv_fcs = frame_start[len - 1];
+	recv_fcs |= frame_start[len - 2] << 8;
 
 	return calc_fcs == recv_fcs;
 }
