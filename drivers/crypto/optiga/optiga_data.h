@@ -25,9 +25,9 @@
 struct data_link_layer {
 	size_t frame_len;
 	u8_t frame_buf[OPTIGA_PHY_BUF_SIZE];
-	u8_t frame_nr;
-	u8_t frame_ack;
-	u8_t retry_cnt;
+	u8_t frame_tx_nr; /* next transmit frame number */
+	u8_t frame_tx_ack;/* last received ack number for transmitted frame */
+	u8_t frame_rx_nr; /* last received frame number */
 };
 
 int optiga_data_init(struct device *dev);

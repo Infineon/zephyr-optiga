@@ -118,43 +118,6 @@ void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
 	frame_start[len + 1] = fcs;
 }
 
-int optiga_send_sync_frame(struct device *dev)
-{
-	struct optiga_data *driver = dev->driver_data;
-	u8_t *frame = driver->data.frame_buf;
-	/* Assemble frame data */
-	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_RST, 0, 0);
-	optiga_data_frame_set_len(frame, 0);
-	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
-	driver->data.frame_len = OPTIGA_DATA_CRTL_FRAME_LEN;
-
-	return optiga_phy_write_data(dev, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
-}
-
-/* send a packet with the correct framing */
-int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
-{
-	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
-	if((len + DATA_LINK_OVERHEAD) > data_reg_len) {
-		LOG_ERR("Packet too big");
-		return -EINVAL;
-	}
-
-	struct optiga_data *driver = dev->driver_data;
-	u8_t * const frame = driver->data.frame_buf;
-	u8_t * const frame_nr = &driver->data.frame_nr;
-	u8_t * const frame_ack = &driver->data.frame_ack;
-
-	/* Assemble frame header */
-	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_DATA | OPTIGA_DATA_FCTR_SEQCTR_ACK, *frame_nr, *frame_ack);
-	optiga_data_frame_set_len(frame, len);
-	/* Copy packet data */
-	memcpy(frame + OPTIGA_DATA_PACKET_START_OFFSET, packet, len);
-	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET + len);
-	driver->data.frame_len = len + DATA_LINK_OVERHEAD;
-
-	return optiga_phy_write_data(dev, frame, driver->data.frame_len);
-}
 
 bool optiga_data_is_ctrl_frame(const u8_t *frame_start)
 {
@@ -173,15 +136,166 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
 	return frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_ACKNR_MASK;
 }
 
+int optiga_send_sync_frame(struct device *dev)
+{
+	struct optiga_data *driver = dev->driver_data;
+	u8_t *frame = driver->data.frame_buf;
+	/* Assemble frame data */
+	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_RST, 0, 0);
+	optiga_data_frame_set_len(frame, 0);
+	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
+	driver->data.frame_len = OPTIGA_DATA_CRTL_FRAME_LEN;
+
+	return optiga_phy_write_data(dev, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
+}
+
+int optiga_send_ack_frame(struct device *dev)
+{
+	struct optiga_data *driver = dev->driver_data;
+	u8_t *frame = driver->data.frame_buf;
+	/* Assemble frame data */
+	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_ACK, 0, driver->data.frame_rx_nr);
+	optiga_data_frame_set_len(frame, 0);
+	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
+	driver->data.frame_len = OPTIGA_DATA_CRTL_FRAME_LEN;
+
+	return optiga_phy_write_data(dev, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
+}
+
+int optiga_data_is_ctrl_frame_available(struct device *dev)
+{
+	u16_t read_len = 0;
+	int res = optiga_get_i2c_state(dev, &read_len, NULL);
+	if(res != 0) {
+		return res;
+	}
+
+	if(read_len == OPTIGA_DATA_CRTL_FRAME_LEN) {
+		return 1;
+	}
+
+	return 0;
+}
+
+int optiga_data_recv_ctrl_frame(struct device *dev)
+{
+	u8_t ctrl_frame_buf[OPTIGA_DATA_CRTL_FRAME_LEN] = {0};
+	size_t ctrl_fram_len = OPTIGA_DATA_CRTL_FRAME_LEN;
+	u8_t flags = 0;
+	int err = optiga_phy_read_data(dev, ctrl_frame_buf, &ctrl_fram_len, &flags);
+	if (err != 0) {
+		LOG_ERR("Failed to read I2C_STATE");
+		return err;
+	}
+
+	LOG_DBG("CTRL len: %d, state flags: 0x%02x", ctrl_fram_len, flags);
+
+	if (ctrl_fram_len == 0) {
+		LOG_DBG("No response available");
+		return 0;
+	}
+
+	if (ctrl_fram_len < OPTIGA_DATA_CRTL_FRAME_LEN) {
+		LOG_ERR("Frame too small");
+		return -EIO;
+	}
+
+	/* Check FCS */
+	bool fcs_good = optiga_data_frame_check_fcs(ctrl_frame_buf, ctrl_fram_len);
+	if(!fcs_good) {
+		/* TODO: handle transmission errors */
+		return -EIO;
+	}
+
+	/* Frame header parsing */
+	u8_t seqctr = optiga_data_get_seqctr(ctrl_frame_buf);
+
+	if (seqctr != OPTIGA_DATA_FCTR_SEQCTR_ACK) {
+		LOG_ERR("Packet not acked");
+		return -EIO;
+	}
+
+	/* check ack matches sent frame */
+	u8_t ack_nr = optiga_data_get_ack_nr(ctrl_frame_buf);
+	struct optiga_data *driver = dev->driver_data;
+
+	if(driver->data.frame_tx_nr == ack_nr) {
+		/* frame nr was acknowledged, increase frame number for next send action */
+		driver->data.frame_tx_nr = (driver->data.frame_tx_nr + 1) % 4;
+		/* make this ack our last received one */
+		driver->data.frame_tx_ack = ack_nr;
+	} else if (driver->data.frame_tx_ack == ack_nr) {
+		LOG_DBG("Received same ACK twice");
+	} else 	{
+		LOG_ERR("Wrong frame acknowledged");
+		//return -EIO;
+	}
+
+	bool ctrl_frame = optiga_data_is_ctrl_frame(ctrl_frame_buf);
+	u16_t frame_len = optiga_data_frame_get_len(ctrl_frame_buf);
+	if (!ctrl_frame || frame_len != 0) {
+		LOG_ERR("Invalid control frame");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+/* send a packet with the correct framing */
+int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
+{
+	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
+	if((len + DATA_LINK_OVERHEAD) > data_reg_len) {
+		LOG_ERR("Packet too big");
+		return -EINVAL;
+	}
+
+	struct optiga_data *driver = dev->driver_data;
+	u8_t * const frame = driver->data.frame_buf;
+	u8_t * const frame_nr = &driver->data.frame_tx_nr;
+	u8_t * const frame_ack = &driver->data.frame_rx_nr;
+
+	/* Assemble frame header */
+	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_DATA | OPTIGA_DATA_FCTR_SEQCTR_ACK, *frame_nr, *frame_ack);
+	optiga_data_frame_set_len(frame, len);
+	/* Copy packet data */
+	memcpy(frame + OPTIGA_DATA_PACKET_START_OFFSET, packet, len);
+	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET + len);
+	driver->data.frame_len = len + DATA_LINK_OVERHEAD;
+
+	int res = optiga_phy_write_data(dev, frame, driver->data.frame_len);
+	if (res != 0) {
+		LOG_ERR("Can't send data to phy");
+		return res;
+	}
+
+	res = optiga_data_is_ctrl_frame_available(dev);
+	if (res < 0) {
+		LOG_ERR("Can't check for controll frame");
+		return res;
+	}
+
+	if (res == 1) {
+		LOG_INF("Ctrl frame available, receiving");
+		return optiga_data_recv_ctrl_frame(dev);
+	}
+
+	LOG_INF("No Ctrl frame available");
+	return 0;
+}
+
+
 /*
  * retval 0 means a frame was received, check data_len for the amounts of bytes received
  * retval 1 means a frame needed to be retransmitted, try again
  * retval 2 means the device is still busy processing the frame
+ * retval 3 means a control frame without data was received
  * data is always invalidated
  * retval <0 means fatal error, re-init needed
  */
 int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 {
+	// TODO: This function has code duplication with optiga_data_recv_ctrl_frame(...)
 	u8_t flags = 0;
 	/* TODO: The receive buffer does not take into account the headers */
 	int err = optiga_phy_read_data(dev, data, data_len, &flags);
@@ -192,6 +306,8 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 
 	LOG_DBG("Read len: %d, state flags: 0x%02x", *data_len, flags);
 
+// This checks should be performed by PHY
+#if 0
 	if (flags & OPTIGA_I2C_STATE_FLAG_BUSY) {
 		LOG_DBG("Device busy");
 		return 2;
@@ -202,6 +318,7 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 		LOG_DBG("No response ready, asume busy");
 		return 2;
 	}
+#endif
 
 	if (*data_len == 0) {
 		LOG_DBG("No response available");
@@ -216,26 +333,35 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 	/* Check FCS */
 	bool fcs_good = optiga_data_frame_check_fcs(data, *data_len);
 	/* TODO: handle transmission errors */
-	assert(fcs_good);
+	if(!fcs_good) {
+		LOG_ERR("FCS error");
+		return -EIO;
+	}
 
 
 	/* Frame header parsing */
 	u8_t seqctr = optiga_data_get_seqctr(data);
 
-	/* TODO: handle NAK and SYNC frames */
-	assert(seqctr == OPTIGA_DATA_FCTR_SEQCTR_ACK);
+	if (seqctr != OPTIGA_DATA_FCTR_SEQCTR_ACK) {
+		LOG_ERR("Packet not acked");
+		return -EIO;
+	}
 
 	/* check ack matches sent frame */
 	u8_t ack_nr = optiga_data_get_ack_nr(data);
 	struct optiga_data *driver = dev->driver_data;
-	u8_t *sent_frame = driver->data.frame_buf;
-	u8_t prev_frame_nr = optiga_data_get_frame_nr(sent_frame);
 
-	/* TODO: handle wrong ack received errors */
-	assert(prev_frame_nr == ack_nr);
-
-	/* Previous frame nr was acknowledged, increase frame number for next send action */
-	driver->data.frame_nr = (driver->data.frame_nr + 1) % 4;
+	if(driver->data.frame_tx_nr == ack_nr) {
+		/* frame nr was acknowledged, increase frame number for next send action */
+		driver->data.frame_tx_nr = (driver->data.frame_tx_nr + 1) % 4;
+		/* make this ack our last received one */
+		driver->data.frame_tx_ack = ack_nr;
+	} else if (driver->data.frame_tx_ack == ack_nr) {
+		LOG_DBG("Received same ACK twice");
+	} else 	{
+		LOG_ERR("Wrong frame acknowledged");
+		//return -EIO;
+	}
 
 	bool ctrl_frame = optiga_data_is_ctrl_frame(data);
 	u16_t frame_len = optiga_data_frame_get_len(data);
@@ -243,13 +369,20 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 		LOG_DBG("Control frame");
 		assert(frame_len == 0);
 		*data_len = 0;
-		return 0;
+		return 3;
 	}
 
 	LOG_DBG("Data frame");
 
+	// TODO: why does the OPTIGA not require an acknowledge frame on recv?
+	/* Acknowledge this frame */
+	//*
+	driver->data.frame_rx_nr = optiga_data_get_frame_nr(data);
+	optiga_send_ack_frame(dev);
+	//*/
+
 	/* Ensure frame lenght matches */
-	assert((frame_len + DATA_LINK_OVERHEAD) == *data_len)
+	assert((frame_len + DATA_LINK_OVERHEAD) == *data_len);
 
 	/* Remove frame header */
 	memmove(data, &data[OPTIGA_DATA_PACKET_START_OFFSET], frame_len);
@@ -274,9 +407,9 @@ int optiga_data_init(struct device *dev)
 	}
 
 	struct optiga_data *driver = dev->driver_data;
-	driver->data.frame_nr = 0;
-	driver->data.frame_ack = 0;
-	driver->data.retry_cnt = 0;
+	driver->data.frame_tx_nr = 0;
+	driver->data.frame_tx_ack = 0;
+	driver->data.frame_rx_nr = 0;
 
 	LOG_DBG("Data Link init successful");
 
