@@ -19,6 +19,12 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_REG_ADDR_SOFT_RESET		0x88
 #define OPTIGA_REG_ADDR_I2C_MODE		0x89
 
+#define OPTIGA_DELAYED_ACK_TRIES 5
+#define OPTIGA_DELAYED_ACK_TIME_MS 10
+
+#define OPTIGA_STATUS_POLL_TRIES 10
+#define OPTIGA_STATUS_POLL_TIME_MS 10
+
 int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
@@ -27,13 +33,13 @@ int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 	bool acked = false;
 	int res = 0;
 	int i = 0;
-	for(i = 0; i < 5; i++) {
+	for(i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
 		res = i2c_write(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
 			acked = true;
 			break;
 		}
-		k_sleep(10);
+		k_sleep(OPTIGA_DELAYED_ACK_TIME_MS);
 	}
 
 	if (!acked) {
@@ -67,13 +73,13 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	/* Read data */
 	bool acked = false;
 	int i = 0;
-	for(i = 0; i < 5; i++) {
+	for(i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
 		res = i2c_read(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
 			acked = true;
 			break;
 		}
-		k_sleep(10);
+		k_sleep(OPTIGA_DELAYED_ACK_TIME_MS);
 	}
 
 	if (!acked) {
@@ -103,6 +109,41 @@ int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len
 	int res = optiga_delayed_ack_write(dev, driver->phy.reg_write_buf, len + 1);
 
 	return res;
+}
+
+/* Poll until BUSY flag is cleared or timeout */
+static bool optiga_poll_rdy(struct device *dev)
+{
+	bool tmp_rdy = false;
+	int i;
+	/* Try only a finite number of times */
+	for (i = 0; i < OPTIGA_STATUS_POLL_TRIES; i++) {
+		u8_t reg = 0;
+		int res = optiga_reg_read(dev, OPTIGA_REG_ADDR_I2C_STATE, &reg, 1);
+		if (res < 0) {
+			LOG_DBG("I2C error");
+			return false;
+		}
+
+		/*
+		 * TODO: it is unclear when exactly the BUSY flag is set and when
+		 * the RESP_RDY flag is set.
+		 * For now I assume that reads are allowed when RESP_RDY is 1 and
+		 * writes are allowed when BUSY is 0
+		 */
+		if ((reg & 0x80) == 0 || reg & 0x40) {
+			/* data available*/
+			tmp_rdy = true;
+			break;
+		}
+
+		/* give the device more time */
+		k_sleep(OPTIGA_STATUS_POLL_TIME_MS);
+	}
+
+	LOG_DBG("BUSY tries: %d", i);
+
+	return tmp_rdy;
 }
 
 /* Can not use optiga_reg_write because the send buffer might not be setup correctly */
@@ -224,6 +265,10 @@ int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flag
 	assert(data);
 	assert(len);
 
+	if(!optiga_poll_rdy(dev)) {
+		return -EIO;
+	}
+
 	uint16_t read_len = 0;
 	int err = optiga_get_i2c_state(dev, &read_len, flags);
 	if (err != 0) {
@@ -243,12 +288,21 @@ int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flag
 	}
 
 	*len = read_len;
+	LOG_HEXDUMP_INF(data, *len, "PHY read:");
 	return 0;
 }
 
 int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len)
 {
 	assert(data);
+
+/*
+	if(!optiga_poll_rdy(dev)) {
+		return -EIO;
+	}
+*/
+
+	LOG_HEXDUMP_INF(data, len, "PHY write:");
 
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, data, len);
 }
