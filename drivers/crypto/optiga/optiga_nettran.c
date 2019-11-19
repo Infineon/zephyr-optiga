@@ -40,25 +40,77 @@ u8_t optiga_nettran_get_chain(u8_t *frame_start)
 int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 {
 	assert(data);
-	u16_t max_apdu_size = optiga_data_get_max_packet_size(dev);
-	assert(max_apdu_size > OPTIGA_NETTRAN_OVERHEAD);
-	max_apdu_size -= OPTIGA_NETTRAN_OVERHEAD;
-
-	// TODO: handle cases where len > max_apdu_size, for now assert on them
-	assert(len <= max_apdu_size);
-
+	u16_t max_packet_size = optiga_data_get_max_packet_size(dev);
+	assert(max_packet_size > OPTIGA_NETTRAN_OVERHEAD);
+	u16_t max_apdu_size =  max_packet_size - OPTIGA_NETTRAN_OVERHEAD;
 	struct optiga_data *driver = dev->driver_data;
 	u8_t * const packet_buf = driver->nettran.packet_buf;
-
-	/* write header */
 	packet_buf[OPTIGA_NETTRAN_PCTR_OFFSET] = 0;
-	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_NONE);
+	int res = 0;
 
-	/* write data */
-	memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, data, len);
+	/* Handle cases which fit in a single packet */
+	if(len <= max_apdu_size) {
+		/* write header */
+		optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_NONE);
 
-	/* hand over to lower layer */
-	return optiga_data_send_packet(dev, packet_buf, len + OPTIGA_NETTRAN_PCTR_LEN);
+		/* write data */
+		memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, data, len);
+
+		/* hand over to lower layer */
+		res = optiga_data_send_packet(dev, packet_buf, len + OPTIGA_NETTRAN_PCTR_LEN);
+		if(res != 0) {
+			return res;
+		}
+
+		return res;
+	}
+
+	const u8_t * cur_data = data;
+	size_t remaining_len = len;
+
+	/* First packet */
+	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_FIRST);
+	memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, max_apdu_size);
+
+	res = optiga_data_send_packet(dev, packet_buf, max_packet_size);
+	if (res != 0) {
+		LOG_ERR("Failed to start chain");
+		return res;
+	}
+
+	cur_data += max_apdu_size;
+	remaining_len -= max_apdu_size;
+
+	/* Send intermediate packets */
+	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_INTER);
+
+	while(remaining_len > max_apdu_size) {
+		memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, max_apdu_size);
+
+		res = optiga_data_send_packet(dev, packet_buf, max_packet_size);
+		if (res != 0) {
+			LOG_ERR("Failed to send intermediate packet");
+			return res;
+		}
+
+		cur_data += max_apdu_size;
+		remaining_len -= max_apdu_size;
+	}
+
+	/* Finish chain */
+	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_LAST);
+
+	memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, remaining_len);
+
+	/* Don't try to recv data on the last packet, acknowledge will be attached to data */
+
+	res = optiga_data_send_packet(dev, packet_buf, remaining_len + 1);
+	if(res != 0) {
+		LOG_ERR("Sending last packet failed");
+		return res;
+	}
+
+	return res;
 }
 
 int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
@@ -66,28 +118,88 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 	assert(data);
 	assert(len);
 
+	size_t buf_len = *len;
+
 	/* TODO: receive buffer must provide space for data + header */
 	int res = optiga_data_recv_frame(dev, data, len);
-	if (res != 0) {
+
+	if (res < 0) {
 		LOG_ERR("Failed to read DATA");
 		return res;
 	}
 
 	u8_t chain = optiga_nettran_get_chain(data);
-	if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_ERROR) {
-		LOG_ERR("Chaining error, need to re-init");
-		return -EIO;
+
+	if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_NONE) {
+		/* No chaining */
+		/* Ensure there are enough bytes for header + data */
+		assert(*len >= OPTIGA_NETTRAN_PACKET_OFFSET);
+
+		/* remove Header */
+		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		memmove(data, data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+
+		return 0;
+	} else if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_FIRST) {
+		/* chaining, first packet */
+
+		/* Ensure there are enough bytes for header + data */
+		assert(*len >= OPTIGA_NETTRAN_PACKET_OFFSET);
+		u16_t max_packet_size = optiga_data_get_max_packet_size(dev);
+
+		/* remove Header */
+		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		memmove(data, data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+
+		size_t cur_len = *len;
+		u8_t *cur_data = data + cur_len;
+		*len = buf_len - cur_len;
+
+		res = optiga_data_recv_frame(dev, cur_data, len);
+		if (res != 0) {
+			LOG_ERR("Failed to read DATA");
+			return res;
+		}
+
+		chain = optiga_nettran_get_chain(cur_data);
+
+		/* Intermediate packets */
+		while(chain == OPTIGA_NETTRAN_PCTR_CHAIN_INTER) {
+			/* Intermediate packets must have maximum size */
+			assert(*len == max_packet_size);
+
+			/* remove Header */
+			*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+			memmove(cur_data, cur_data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+
+			cur_len += *len;
+			cur_data = data + cur_len;
+			*len = buf_len - cur_len;
+
+			res = optiga_data_recv_frame(dev, cur_data, len);
+			if (res != 0) {
+				LOG_ERR("Failed to read DATA");
+				return res;
+			}
+
+			chain = optiga_nettran_get_chain(cur_data);
+		}
+
+		if (chain != OPTIGA_NETTRAN_PCTR_CHAIN_LAST) {
+			LOG_ERR("Chaining error in chain");
+			return -EIO;
+		}
+
+		/* remove Header of last packet */
+		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		memmove(cur_data, cur_data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+
+		cur_len += *len;
+		*len = cur_len;
+
+		return 0;
 	}
 
-	/* TODO: implement chaining */
-	assert(chain == OPTIGA_NETTRAN_PCTR_CHAIN_NONE);
-
-	/* Ensure there are enough bytes for header + data */
-	assert(*len >= OPTIGA_NETTRAN_PACKET_OFFSET);
-
-	/* remove Header */
-	*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-	memmove(data, data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
-
-	return 0;
+	LOG_ERR("Chaining error, need to re-init");
+	return -EIO;
 }
