@@ -138,7 +138,6 @@ void set_data_object()
 		sizeof(set_data_object_apdu));
 
 	LOG_INF("APDU send result: %d", res);
-	k_sleep(500);
 
 	tmp_buf_len = TMP_BUF_SIZE;
 
@@ -198,9 +197,6 @@ void get_data_object()
 		sizeof(get_data_object_apdu));
 
 	LOG_INF("APDU send result: %d", res);
-	k_sleep(500);
-
-	read_status();
 
 	tmp_buf_len = TMP_BUF_SIZE;
 
@@ -230,7 +226,6 @@ void set_data_object_small()
 		sizeof(set_data_object_apdu));
 
 	LOG_INF("APDU send result: %d", res);
-	k_sleep(500);
 
 	read_status();
 
@@ -255,13 +250,12 @@ void main(void)
 		return;
 	}
 
-	LOG_INF("Found Trust M device\n");
+	LOG_INF("Found Trust M device");
 
 	test_fcs();
-	open_application();
 	//read_status();
 	set_data_object();
-	k_sleep(100);
+	//k_sleep(100);
 	get_data_object();
 	read_status();
 
@@ -317,6 +311,4 @@ void main(void)
 	}
 
 	LOG_HEXDUMP_INF(data_reg_len_reg, 2, "Read data reg len:");
-
-
 }

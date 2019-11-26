@@ -26,6 +26,50 @@ static const struct dummy_api dummy_funcs = {
 	.dummy = NULL,
 };
 
+/*
+ * Initializes the application on the OPTIGA chip
+ */
+static int optiga_open_application(struct device *dev)
+{
+	static const u8_t optiga_open_application_apdu[] =
+	{
+		0xF0, /* command code */
+		0x00, /* clean context */
+		0x00, 0x10, /* 16 bytes parameter */
+		/* unique application identifier */
+		0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
+	};
+
+	int res = optiga_nettran_send_apdu(dev,
+		optiga_open_application_apdu,
+		sizeof(optiga_open_application_apdu));
+	if(res != 0) {
+		LOG_ERR("Failed to send OpenApplication APDU");
+		return res;
+	}
+
+	// TODO: reduce buffer size once the communication stack overhead has been eliminated
+	u8_t tmp_buf[16] = {0};
+	size_t tmp_buf_len = 16;
+
+	/* Expected response to "OpenApplication" */
+	const u8_t resp[4] = {0};
+	const size_t resp_len = 4;
+
+	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (res != 0) {
+		LOG_INF("Failed to OpenApplication APDU response");
+		return res;
+	}
+
+	if(resp_len != tmp_buf_len || memcmp(tmp_buf, resp, resp_len)) {
+		LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+		return -EIO;
+	}
+
+	return 0;
+}
+
 int optiga_init(struct device *dev)
 {
 	LOG_DBG("Init OPTIGA");
@@ -48,6 +92,18 @@ int optiga_init(struct device *dev)
 	err = optiga_data_init(dev);
 	if(err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA data link layer");
+		return err;
+	}
+
+	err = optiga_nettran_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA nettran layer");
+		return err;
+	}
+
+	err = optiga_open_application(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to open the OPTIGA application");
 		return err;
 	}
 
