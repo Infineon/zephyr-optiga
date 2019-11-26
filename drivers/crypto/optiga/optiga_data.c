@@ -102,9 +102,9 @@ u16_t optiga_data_frame_get_len(u8_t *frame_start)
 void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8_t frame_ack)
 {
 	/* ensure no bits are written outside their fields */
-	assert(!(flags & ~(OPTIGA_DATA_FCTR_FTYPE_MASK|OPTIGA_DATA_FCTR_SEQCTR_MASK)));
-	assert(!(frame_nr & 0xf3));
-	assert(!(frame_ack & 0xfc));
+	__ASSERT(!(flags & ~(OPTIGA_DATA_FCTR_FTYPE_MASK|OPTIGA_DATA_FCTR_SEQCTR_MASK)), "Invalid flags");
+	__ASSERT(!(frame_nr & 0xf3), "Invalid frame_nr");
+	__ASSERT(!(frame_ack & 0xfc), "Invalid ack_nr");
 
 	frame_start[OPTIGA_DATA_FCTR_OFFSET] = flags | frame_nr << 2 | frame_ack;
 }
@@ -293,7 +293,7 @@ int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
  * data is always invalidated
  * retval <0 means fatal error, re-init needed
  */
-int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
+int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 {
 	// TODO: This function has code duplication with optiga_data_recv_ctrl_frame(...)
 	u8_t flags = 0;
@@ -367,22 +367,19 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 	u16_t frame_len = optiga_data_frame_get_len(data);
 	if (ctrl_frame) {
 		LOG_DBG("Control frame");
-		assert(frame_len == 0);
+		__ASSERT(frame_len == 0, "Invalid frame lenght for control frame");
 		*data_len = 0;
 		return 3;
 	}
 
 	LOG_DBG("Data frame");
 
-	// TODO: why does the OPTIGA not require an acknowledge frame on recv?
 	/* Acknowledge this frame */
-	//*
 	driver->data.frame_rx_nr = optiga_data_get_frame_nr(data);
 	optiga_send_ack_frame(dev);
-	//*/
 
 	/* Ensure frame lenght matches */
-	assert((frame_len + DATA_LINK_OVERHEAD) == *data_len);
+	__ASSERT((frame_len + DATA_LINK_OVERHEAD) == *data_len, "Invalid frame lenght");
 
 	/* Remove frame header */
 	memmove(data, &data[OPTIGA_DATA_PACKET_START_OFFSET], frame_len);
@@ -393,7 +390,7 @@ int optiga_data_recv_frame(struct device *dev, u8_t *data, size_t *data_len)
 u16_t optiga_data_get_max_packet_size(struct device *dev)
 {
 	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
-	assert(data_reg_len > DATA_LINK_OVERHEAD);
+	__ASSERT(data_reg_len > DATA_LINK_OVERHEAD, "Packet too small");
 	return data_reg_len - DATA_LINK_OVERHEAD;
 }
 

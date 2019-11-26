@@ -162,7 +162,7 @@ int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len) {
 }
 
 int optiga_get_data_reg_len(struct device *dev, u16_t* data_reg_len) {
-	assert(data_reg_len != NULL);
+	__ASSERT(data_reg_len != NULL, "Invalid NULL pointer");
 
 	u8_t raw[2] = {0};
 	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA_REG_LEN, raw, 2);

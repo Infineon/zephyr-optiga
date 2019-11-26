@@ -38,12 +38,10 @@ enum {
 	OPTIGA_I2C_STATE_FLAG_CLK_STRETCHING = 0x01
 };
 
-int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len);
-int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len);
+int optiga_phy_init(struct device *dev);
 u16_t optiga_phy_get_data_reg_len(struct device *dev);
 int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len);
 int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flags);
-int optiga_phy_init(struct device *dev);
 int optiga_get_i2c_state(struct device *dev, u16_t* read_len, u8_t* state_flags);
 
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PHY_H_ */
