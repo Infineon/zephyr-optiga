@@ -103,7 +103,7 @@ void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8
 {
 	/* ensure no bits are written outside their fields */
 	__ASSERT(!(flags & ~(OPTIGA_DATA_FCTR_FTYPE_MASK|OPTIGA_DATA_FCTR_SEQCTR_MASK)), "Invalid flags");
-	__ASSERT(!(frame_nr & 0xf3), "Invalid frame_nr");
+	__ASSERT(!(frame_nr & 0xfc), "Invalid frame_nr");
 	__ASSERT(!(frame_ack & 0xfc), "Invalid ack_nr");
 
 	frame_start[OPTIGA_DATA_FCTR_OFFSET] = flags | frame_nr << 2 | frame_ack;
