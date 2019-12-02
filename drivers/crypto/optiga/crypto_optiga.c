@@ -26,6 +26,18 @@ static const struct dummy_api dummy_funcs = {
 	.dummy = NULL,
 };
 
+#define OPTIGA_OID_ERROR_CODE 0xF1C2
+
+static const u8_t error_code_apdu[] =
+{
+	0x01, /* get DataObject, don't clear error code because we want to read it */
+	0x00, /* read data */
+	0x00, 0x06, /* 6 bytes following */
+	0xF1, 0xC2, /* Error codes object */
+	0x00, 0x00, /* Offset */
+	0x00, 0x01, /* all error codes are 1 byte */
+};
+
 /*
  * Initializes the application on the OPTIGA chip
  */
@@ -66,6 +78,51 @@ static int optiga_open_application(struct device *dev)
 		LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
 		return -EIO;
 	}
+
+	return 0;
+}
+
+int optiga_get_error_code(struct device *dev, u8_t *err_code)
+{
+	__ASSERT(dev, "Invalid NULL pointer");
+	__ASSERT(err_code, "Invalid NULL pointer");
+
+	int res = optiga_nettran_send_apdu(dev,
+		error_code_apdu,
+		sizeof(error_code_apdu));
+	if(res != 0) {
+		LOG_ERR("Failed to send Error Code APDU");
+		return res;
+	}
+
+	// TODO: reduce buffer size once the communication stack overhead has been eliminated
+	u8_t tmp_buf[16] = {0};
+	size_t tmp_buf_len = 16;
+
+
+	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (res != 0) {
+		LOG_INF("Failed to get Error Code APDU response");
+		return res;
+	}
+
+	/* Expected APDU return length is always 5 */
+	if (tmp_buf_len != 5) {
+		LOG_ERR("Unexpected response length");
+		return -EIO;
+	}
+
+	if (tmp_buf[0] != 0) {
+		LOG_ERR("Failed to retrieve Error Code");
+		return -EIO;
+	}
+
+	if (tmp_buf[2] != 0x00 || tmp_buf[3] != 0x01) {
+		LOG_ERR("Unexpected data length");
+		return -EIO;
+	}
+
+	*err_code = tmp_buf[4];
 
 	return 0;
 }
