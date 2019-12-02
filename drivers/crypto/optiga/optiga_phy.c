@@ -266,7 +266,7 @@ int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flag
 	__ASSERT(data, "Invalid NULL pointer");
 	__ASSERT(len, "Invalid NULL pointer");
 
-	/* Don't check BUSY here, because prevents reading of the last ack frame for an APDU */
+	/* Don't check BUSY here, because it prevents reading of the last ack frame for an APDU */
 	if(!optiga_poll_status(dev, OPTIGA_REG_I2C_STATE_RESP_RDY, OPTIGA_REG_I2C_STATE_RESP_RDY)) {
 		optiga_get_i2c_state(dev, NULL, NULL);
 		LOG_ERR("No response available");

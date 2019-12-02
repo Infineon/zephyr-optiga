@@ -8,6 +8,7 @@
 #include <drivers/i2c.h>
 #include <kernel.h>
 #include <zephyr.h>
+#include <drivers/crypto/optiga.h>
 
 #include "crypto_optiga.h"
 #include "optiga_phy.h"
@@ -16,17 +17,10 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga);
 
-typedef int (*dummy_api_t)();
-
-struct dummy_api {
-	dummy_api_t dummy;
-};
-
-static const struct dummy_api dummy_funcs = {
-	.dummy = NULL,
-};
-
-#define OPTIGA_OID_ERROR_CODE 0xF1C2
+#define OPTIGA_STACK_SIZE 1024
+// TODO(chr): make Kconfig tunable
+#define OPTIGA_THREAD_PRIORITY 1
+void optiga_worker(void* arg1, void *arg2, void *arg3);
 
 static const u8_t error_code_apdu[] =
 {
@@ -164,21 +158,82 @@ int optiga_init(struct device *dev)
 		return err;
 	}
 
+	k_fifo_init(&data->apdu_queue);
+
+	k_thread_create(&data->worker, data->worker_stack,
+			 OPTIGA_STACK_SIZE,
+			 optiga_worker,
+			 dev, NULL, NULL,
+			 OPTIGA_THREAD_PRIORITY, 0, K_NO_WAIT);
+
 	return 0;
 }
 
+static int enqueue_apdu(struct device *dev, struct optiga_apdu *apdu)
+{
+	__ASSERT(dev, "Invalid NULL pointer");
+	__ASSERT(apdu, "Invalid NULL pointer");
+	k_poll_signal_init(&apdu->finished);
+	struct optiga_data *data = dev->driver_data;
+
+	k_fifo_put(&data->apdu_queue, apdu);
+	return 0;
+}
+
+void optiga_worker(void* arg1, void *arg2, void *arg3)
+{
+	struct device *dev = arg1;
+	struct optiga_data *data = dev->driver_data;
+
+	/* execute forevever */
+	while (true) {
+		struct optiga_apdu *apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
+		__ASSERT(apdu, "Unexpected NULL pointer");
+
+		int res = optiga_nettran_send_apdu(dev,
+			apdu->tx_buf,
+			apdu->tx_len);
+		if(res != 0) {
+			LOG_ERR("Failed to send APDU");
+			// TODO(chr): define error codes
+			apdu->status_code = 0x01;
+			k_poll_signal_raise(&apdu->finished, 0);
+			continue;
+		}
+
+		res = optiga_nettran_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
+		if (res != 0) {
+			LOG_ERR("Failed to receive APDU");
+			// TODO(chr): define error codes
+			apdu->status_code = 0x01;
+			k_poll_signal_raise(&apdu->finished, 0);
+			continue;
+		}
+
+		apdu->status_code = 0x00;
+		k_poll_signal_raise(&apdu->finished, 0);
+	}
+};
+
+static const struct optiga_api optiga_api_funcs = {
+	.optiga_enqueue_apdu = enqueue_apdu,
+};
+
 #define OPTIGA_DEVICE(id)						\
+static K_THREAD_STACK_DEFINE(optiga_##id##_stack, OPTIGA_STACK_SIZE);	\
 	static const struct optiga_cfg optiga_##id##_cfg = {		\
 		.i2c_dev_name = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_BUS_NAME,	\
 		.i2c_addr     = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_BASE_ADDRESS,	\
 	};								\
 									\
-static struct optiga_data optiga_##id##_data;				\
+static struct optiga_data optiga_##id##_data = {			\
+		.worker_stack = optiga_##id##_stack			\
+	};								\
 									\
 DEVICE_AND_API_INIT(optiga_##id, DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_LABEL,	\
 		    &optiga_init, &optiga_##id##_data,		\
 		    &optiga_##id##_cfg, POST_KERNEL,			\
-		    CONFIG_CRYPTO_INIT_PRIORITY, &dummy_funcs)
+		    CONFIG_CRYPTO_INIT_PRIORITY, &optiga_api_funcs)
 
 #ifdef DT_INST_0_INFINEON_OPTIGA_TRUST_M
 OPTIGA_DEVICE(0);

@@ -16,6 +16,9 @@ struct optiga_data {
 	struct physical_layer phy;
 	struct data_link_layer data;
 	struct nettran_layer nettran;
+	struct k_fifo apdu_queue;
+	struct k_thread worker;
+	k_thread_stack_t *worker_stack;
 };
 
 struct optiga_cfg {

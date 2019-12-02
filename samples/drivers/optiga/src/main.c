@@ -42,42 +42,6 @@ void read_status()
 	LOG_HEXDUMP_INF(status_reg, 4, "Read status register:");
 }
 
-void open_application()
-{
-	const u8_t optiga_open_application_apdu[] =
-	{
-		0xF0, /* command code */
-		0x00, /* clean context */
-		0x00, 0x10, /* 16 bytes parameter */
-		/* unique application identifier */
-		0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
-	};
-
-	int res = optiga_nettran_send_apdu(dev,
-		optiga_open_application_apdu,
-		sizeof(optiga_open_application_apdu));
-
-	LOG_INF("APDU send result: %d", res);
-	k_sleep(500);
-
-	read_status();
-	tmp_buf_len = TMP_BUF_SIZE;
-
-	/* Expected response to "OpenApplication" */
-	const u8_t resp[4] = {0};
-	const size_t resp_len = 4;
-
-	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
-	if (res != 0) {
-		LOG_INF("Failed to read APDU response");
-		return;
-	}
-
-	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Open Application response:");
-	assert(tmp_buf_len == 4);
-	assert(equals(tmp_buf, tmp_buf_len, resp, resp_len));
-}
-
 void test_fcs()
 {
 	/* Test case for FCS */
@@ -209,6 +173,37 @@ void get_data_object()
 	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Get DO response:");
 }
 
+void get_data_object_queued()
+{
+	const u8_t get_data_object_apdu[] = {
+		0x81, /* command code */
+		0x00, /* param, read data */
+		0x00, 0x02, /* Length */
+		0xF1, 0xE0, /* OID */
+	};
+
+	LOG_INF("Get DO:");
+
+	struct optiga_apdu get_do_txrx = {
+		.tx_buf = get_data_object_apdu,
+		.tx_len = sizeof(get_data_object_apdu),
+		.rx_buf = tmp_buf,
+		.rx_len = TMP_BUF_SIZE,
+	};
+
+	optiga_enqueue_apdu(dev, &get_do_txrx);
+
+	struct k_poll_event events[1] = {
+        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+                                 K_POLL_MODE_NOTIFY_ONLY,
+                                 &get_do_txrx.finished),
+	};
+
+	k_poll(events, 1, K_FOREVER);
+
+	LOG_HEXDUMP_INF(tmp_buf, get_do_txrx.rx_len, "Get DO response:");
+}
+
 void set_data_object_small()
 {
 	const u8_t set_data_object_apdu[] = {
@@ -254,9 +249,9 @@ void main(void)
 
 	test_fcs();
 	//read_status();
-	set_data_object();
+	//set_data_object();
 	//k_sleep(100);
-	get_data_object();
+	get_data_object_queued();
 	read_status();
 
 	return;
