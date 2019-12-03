@@ -9,6 +9,7 @@
 #include <drivers/crypto/optiga.h>
 #include <sys/util.h>
 #include <zephyr.h>
+#include "cmds_trust_x.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <logging/log.h>
@@ -240,32 +241,8 @@ void set_data_object_small()
 	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Set DO response:");
 }
 
-void main(void)
+void phy_test()
 {
-	LOG_INF("Hello OPTIGA");
-	dev = device_get_binding("trust-m");
-
-	if (dev == NULL) {
-		LOG_INF("Could not get Trust M device\n");
-		return;
-	}
-
-	LOG_INF("Found Trust M device");
-
-	test_fcs();
-	//read_status();
-	//set_data_object();
-	//k_sleep(100);
-	get_data_object_queued();
-	read_status();
-
-	return;
-
-	while(true) {
-		read_status();
-		k_sleep(500);
-	}
-
 	u8_t data_reg_len_reg[2] = {0};
 	int res = optiga_reg_read(dev, 0x81, data_reg_len_reg, 2);
 	if (res != 0) {
@@ -311,4 +288,59 @@ void main(void)
 	}
 
 	LOG_HEXDUMP_INF(data_reg_len_reg, 2, "Read data reg len:");
+}
+
+void main(void)
+{
+	LOG_INF("Hello OPTIGA");
+	dev = device_get_binding("trust-m");
+
+	if (dev == NULL) {
+		LOG_INF("Could not get Trust M device\n");
+		return;
+	}
+
+	LOG_INF("Found Trust M device");
+
+	test_fcs();
+	//read_status();
+	//set_data_object();
+	//k_sleep(100);
+	//get_data_object_queued();
+	//read_status();
+
+	struct cmds_ctx ctx;
+
+	int res = cmds_trust_x_init(&ctx, dev, tmp_buf, TMP_BUF_SIZE);
+
+	LOG_INF("cmds_trust_x_init res: %d", res);
+
+	u8_t res_buf[400] = {0};
+	size_t res_len = 400;
+
+	res = cmds_trust_x_get_data_object(&ctx, 0xF1E0, 0, res_buf, &res_len);
+
+	LOG_INF("cmds_trust_x_get_data_object res: %d", res);
+	LOG_HEXDUMP_INF(res_buf, res_len, "Get DO:");
+
+	/* Flip some bits */
+	res_buf[0] ^= 0x0F;
+	k_sleep(100);
+
+	res = cmds_trust_x_set_data_object(&ctx, 0xF1E0, 0, res_buf, res_len);
+	LOG_INF("cmds_trust_x_set_data_object res: %d", res);
+	k_sleep(100);
+
+	res = cmds_trust_x_get_data_object(&ctx, 0xF1E0, 0, res_buf, &res_len);
+
+	LOG_INF("cmds_trust_x_get_data_object res: %d", res);
+	LOG_HEXDUMP_INF(res_buf, res_len, "Get DO:");
+
+
+	while(true) {
+		read_status();
+		k_sleep(500);
+	}
+
+
 }
