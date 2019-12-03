@@ -210,6 +210,23 @@ void optiga_worker(void* arg1, void *arg2, void *arg3)
 			continue;
 		}
 
+		/* Check if an error occured and retrieve it */
+		__ASSERT(apdu->rx_len > 0, "Not enough bytes in APDU");
+		if(apdu->rx_buf[0] != 0x00) {
+			res = optiga_get_error_code(dev, &apdu->status_code);
+			if (res != 0) {
+				LOG_ERR("Failed to receive Error Code");
+				// TODO(chr): define error codes
+				apdu->status_code = 0x01;
+				k_poll_signal_raise(&apdu->finished, 0);
+				continue;
+			}
+
+			// TODO(chr): define error codes
+			k_poll_signal_raise(&apdu->finished, 0);
+			continue;
+		}
+
 		apdu->status_code = 0x00;
 		k_poll_signal_raise(&apdu->finished, 0);
 	}
