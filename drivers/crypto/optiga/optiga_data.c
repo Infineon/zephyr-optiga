@@ -178,26 +178,26 @@ int optiga_data_is_ctrl_frame_available(struct device *dev)
 
 int optiga_data_recv_ctrl_frame(struct device *dev)
 {
-	u8_t ctrl_frame_buf[OPTIGA_DATA_CRTL_FRAME_LEN] = {0};
-	size_t ctrl_fram_len = OPTIGA_DATA_CRTL_FRAME_LEN;
-	u8_t flags = 0;
-	int err = optiga_phy_read_data(dev, ctrl_frame_buf, &ctrl_fram_len, &flags);
+	size_t ctrl_fram_len = 0;
+	int err = optiga_phy_read_data(dev, &ctrl_fram_len);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
 		return err;
 	}
 
-	LOG_DBG("CTRL len: %d, state flags: 0x%02x", ctrl_fram_len, flags);
+	LOG_DBG("CTRL len: %d", ctrl_fram_len);
 
 	if (ctrl_fram_len == 0) {
 		LOG_DBG("No response available");
 		return 0;
 	}
 
-	if (ctrl_fram_len < OPTIGA_DATA_CRTL_FRAME_LEN) {
-		LOG_ERR("Frame too small");
+	if (ctrl_fram_len != OPTIGA_DATA_CRTL_FRAME_LEN) {
+		LOG_ERR("Invalid frame");
 		return -EIO;
 	}
+
+	u8_t* ctrl_frame_buf = optiga_phy_data_buf(dev, NULL);
 
 	/* Check FCS */
 	bool fcs_good = optiga_data_frame_check_fcs(ctrl_frame_buf, ctrl_fram_len);
@@ -292,42 +292,34 @@ int optiga_data_send_packet(struct device *dev, size_t len)
 int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 {
 	// TODO: This function has code duplication with optiga_data_recv_ctrl_frame(...)
-	u8_t flags = 0;
-	/* TODO: The receive buffer does not take into account the headers */
-	int err = optiga_phy_read_data(dev, data, data_len, &flags);
+	size_t rx_data_len = 0;
+	int err = optiga_phy_read_data(dev, &rx_data_len);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
 		return err;
 	}
 
-	LOG_DBG("Read len: %d, state flags: 0x%02x", *data_len, flags);
+	LOG_DBG("Read len: %u", rx_data_len);
 
-// This checks should be performed by PHY
-#if 0
-	if (flags & OPTIGA_I2C_STATE_FLAG_BUSY) {
-		LOG_DBG("Device busy");
-		return 2;
-	}
-
-	if (!(flags & OPTIGA_I2C_STATE_FLAG_RESP_READY)) {
-		/* TODO: Do we always get a response? */
-		LOG_DBG("No response ready, asume busy");
-		return 2;
-	}
-#endif
-
-	if (*data_len == 0) {
+	if (rx_data_len == 0) {
 		LOG_DBG("No response available");
 		return 0;
 	}
 
-	if (*data_len < OPTIGA_DATA_CRTL_FRAME_LEN) {
+	if (rx_data_len < OPTIGA_DATA_CRTL_FRAME_LEN) {
 		LOG_ERR("Frame too small");
 		return -EIO;
 	}
 
+	if (rx_data_len > *data_len) {
+		LOG_ERR("Not enough memory in output buffer");
+		return -ENOMEM;
+	}
+
+	u8_t *data_buf = optiga_phy_data_buf(dev, NULL);
+
 	/* Check FCS */
-	bool fcs_good = optiga_data_frame_check_fcs(data, *data_len);
+	bool fcs_good = optiga_data_frame_check_fcs(data_buf, rx_data_len);
 	/* TODO: handle transmission errors */
 	if(!fcs_good) {
 		LOG_ERR("FCS error");
@@ -336,7 +328,7 @@ int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 
 
 	/* Frame header parsing */
-	u8_t seqctr = optiga_data_get_seqctr(data);
+	u8_t seqctr = optiga_data_get_seqctr(data_buf);
 
 	if (seqctr != OPTIGA_DATA_FCTR_SEQCTR_ACK) {
 		LOG_ERR("Packet not acked");
@@ -344,7 +336,7 @@ int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 	}
 
 	/* check ack matches sent frame */
-	u8_t ack_nr = optiga_data_get_ack_nr(data);
+	u8_t ack_nr = optiga_data_get_ack_nr(data_buf);
 	struct optiga_data *driver = dev->driver_data;
 
 	if(driver->data.frame_tx_nr == ack_nr) {
@@ -359,8 +351,8 @@ int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 		//return -EIO;
 	}
 
-	bool ctrl_frame = optiga_data_is_ctrl_frame(data);
-	u16_t frame_len = optiga_data_frame_get_len(data);
+	bool ctrl_frame = optiga_data_is_ctrl_frame(data_buf);
+	u16_t frame_len = optiga_data_frame_get_len(data_buf);
 	if (ctrl_frame) {
 		LOG_DBG("Control frame");
 		__ASSERT(frame_len == 0, "Invalid frame lenght for control frame");
@@ -369,17 +361,17 @@ int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 	}
 
 	LOG_DBG("Data frame");
-
-	/* Acknowledge this frame */
-	driver->data.frame_rx_nr = optiga_data_get_frame_nr(data);
-	optiga_send_ack_frame(dev);
-
 	/* Ensure frame lenght matches */
-	__ASSERT((frame_len + DATA_LINK_OVERHEAD) == *data_len, "Invalid frame lenght");
+	__ASSERT((frame_len + DATA_LINK_OVERHEAD) == rx_data_len, "Invalid frame lenght");
 
 	/* Remove frame header */
-	memmove(data, &data[OPTIGA_DATA_PACKET_START_OFFSET], frame_len);
+	memcpy(data, &data_buf[OPTIGA_DATA_PACKET_START_OFFSET], frame_len);
 	*data_len = frame_len;
+
+	/* Acknowledge this frame, this destroys the data in the receive buffer */
+	driver->data.frame_rx_nr = optiga_data_get_frame_nr(data_buf);
+	optiga_send_ack_frame(dev);
+
 	return 0;
 }
 

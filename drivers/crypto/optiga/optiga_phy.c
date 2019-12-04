@@ -274,38 +274,36 @@ int optiga_phy_init(struct device *dev) {
 	return 0;
 }
 
-int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flags)
+int optiga_phy_read_data(struct device *dev, size_t *len)
 {
-	__ASSERT(data, "Invalid NULL pointer");
 	__ASSERT(len, "Invalid NULL pointer");
 
 	/* Don't check BUSY here, because it prevents reading of the last ack frame for an APDU */
 	if(!optiga_poll_status(dev, OPTIGA_REG_I2C_STATE_RESP_RDY, OPTIGA_REG_I2C_STATE_RESP_RDY)) {
-		optiga_get_i2c_state(dev, NULL, NULL);
 		LOG_ERR("No response available");
 		return -EIO;
 	}
 
 	uint16_t read_len = 0;
-	int err = optiga_get_i2c_state(dev, &read_len, flags);
+	int err = optiga_get_i2c_state(dev, &read_len, NULL);
 	if (err != 0) {
 		LOG_ERR("Failed to get data length");
 		return err;
 	}
 
-	if (*len < read_len) {
-		LOG_ERR("Receive buffer too small");
-		return -ENOMEM;
-	}
+	size_t data_buf_len = 0;
+	u8_t *data_buf = optiga_phy_data_buf(dev, &data_buf_len);
 
-	err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA, data, read_len);
+	__ASSERT(read_len <= data_buf_len, "Receive buffer too small");
+
+	err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA, data_buf, read_len);
 	if (err != 0) {
 		LOG_DBG("Failed to read DATA register");
 		return err;
 	}
 
 	*len = read_len;
-	LOG_HEXDUMP_INF(data, *len, "PHY read:");
+	LOG_HEXDUMP_INF(data_buf, *len, "PHY read:");
 	return 0;
 }
 
