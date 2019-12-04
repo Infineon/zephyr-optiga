@@ -241,7 +241,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 }
 
 /* send a packet with the correct framing */
-int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
+int optiga_data_send_packet(struct device *dev, size_t len)
 {
 	size_t max_frame_len = 0;
 	u8_t * const frame = optiga_phy_data_buf(dev, &max_frame_len);
@@ -257,8 +257,6 @@ int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
 	/* Assemble frame header */
 	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_DATA | OPTIGA_DATA_FCTR_SEQCTR_ACK, *frame_nr, *frame_ack);
 	optiga_data_frame_set_len(frame, len);
-	/* Copy packet data */
-	memcpy(frame + OPTIGA_DATA_PACKET_START_OFFSET, packet, len);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET + len);
 
 	int res = optiga_phy_write_data(dev, len + DATA_LINK_OVERHEAD);
@@ -385,14 +383,6 @@ int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 	return 0;
 }
 
-u16_t optiga_data_get_max_packet_size(struct device *dev)
-{
-	size_t data_reg_len = 0;
-	optiga_phy_data_buf(dev, &data_reg_len);
-	__ASSERT(data_reg_len > DATA_LINK_OVERHEAD, "Packet too small");
-	return data_reg_len - DATA_LINK_OVERHEAD;
-}
-
 int optiga_data_init(struct device *dev)
 {
 	/* Bring to a known state */
@@ -410,6 +400,21 @@ int optiga_data_init(struct device *dev)
 	LOG_DBG("Data Link init successful");
 
 	return 0;
+}
+
+u8_t *optiga_data_packet_buf(struct device *dev, size_t *len)
+{
+	size_t res_len = 0;
+	u8_t *res_buf = optiga_phy_data_buf(dev, &res_len);
+	__ASSERT(res_len > DATA_LINK_OVERHEAD, "PHY layer buffer too small");
+	res_buf += OPTIGA_DATA_HEADER_LEN;
+	res_len -= DATA_LINK_OVERHEAD;
+
+	if(len) {
+		*len = res_len;
+	}
+
+	return res_buf;
 }
 
 

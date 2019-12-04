@@ -40,11 +40,11 @@ u8_t optiga_nettran_get_chain(u8_t *frame_start)
 int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 {
 	__ASSERT(data, "Invalid NULL pointer");
-	u16_t max_packet_size = optiga_data_get_max_packet_size(dev);
-	__ASSERT(max_packet_size > OPTIGA_NETTRAN_OVERHEAD, "Packet to small");
-	u16_t max_apdu_size =  max_packet_size - OPTIGA_NETTRAN_OVERHEAD;
-	struct optiga_data *driver = dev->driver_data;
-	u8_t * const packet_buf = driver->nettran.packet_buf;
+	size_t max_packet_size = 0;
+	u8_t *packet_buf = optiga_data_packet_buf(dev, &max_packet_size);
+
+	__ASSERT(max_packet_size > OPTIGA_NETTRAN_OVERHEAD, "Packet size to small");
+	size_t max_apdu_size =  max_packet_size - OPTIGA_NETTRAN_OVERHEAD;
 	packet_buf[OPTIGA_NETTRAN_PCTR_OFFSET] = 0;
 	int res = 0;
 
@@ -57,7 +57,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 		memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, data, len);
 
 		/* hand over to lower layer */
-		res = optiga_data_send_packet(dev, packet_buf, len + OPTIGA_NETTRAN_PCTR_LEN);
+		res = optiga_data_send_packet(dev, len + OPTIGA_NETTRAN_PCTR_LEN);
 		if(res != 0) {
 			return res;
 		}
@@ -72,7 +72,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_FIRST);
 	memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, max_apdu_size);
 
-	res = optiga_data_send_packet(dev, packet_buf, max_packet_size);
+	res = optiga_data_send_packet(dev, max_packet_size);
 	if (res != 0) {
 		LOG_ERR("Failed to start chain");
 		return res;
@@ -87,7 +87,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	while(remaining_len > max_apdu_size) {
 		memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, max_apdu_size);
 
-		res = optiga_data_send_packet(dev, packet_buf, max_packet_size);
+		res = optiga_data_send_packet(dev, max_packet_size);
 		if (res != 0) {
 			LOG_ERR("Failed to send intermediate packet");
 			return res;
@@ -104,7 +104,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 
 	/* Don't try to recv data on the last packet, acknowledge will be attached to data */
 
-	res = optiga_data_send_packet(dev, packet_buf, remaining_len + 1);
+	res = optiga_data_send_packet(dev, remaining_len + 1);
 	if(res != 0) {
 		LOG_ERR("Sending last packet failed");
 		return res;
@@ -145,7 +145,8 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 		/* Ensure there are enough bytes for header + data */
 		__ASSERT(*len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
-		u16_t max_packet_size = optiga_data_get_max_packet_size(dev);
+		size_t max_packet_size = 0;
+		optiga_data_packet_buf(dev, &max_packet_size);
 
 		/* remove Header */
 		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;

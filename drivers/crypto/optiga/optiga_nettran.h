@@ -16,7 +16,6 @@
 
 /* network and transport */
 struct nettran_layer {
-	u8_t packet_buf[OPTIGA_DATA_BUF_SIZE];
 };
 
 int optiga_nettran_init(struct device *dev);
