@@ -2,6 +2,8 @@
 #include "optiga_phy.h"
 #include "optiga_data.h"
 
+#include <sys/byteorder.h>
+
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga_data);
@@ -80,23 +82,19 @@ bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
 	}
 
 	u16_t calc_fcs = optiga_data_frame_calc_fcs(frame_start, len - 2);
-	u16_t recv_fcs = frame_start[len - 1];
-	recv_fcs |= frame_start[len - 2] << 8;
+	u16_t recv_fcs = sys_get_be16(&frame_start[len - 2]);
 
 	return calc_fcs == recv_fcs;
 }
 
 void optiga_data_frame_set_len(u8_t *frame_start, u16_t len_value)
 {
-	frame_start[OPTIGA_DATA_LEN_OFFSET] = len_value >> 8;
-	frame_start[OPTIGA_DATA_LEN_OFFSET + 1] = len_value;
+	sys_put_be16(len_value, &frame_start[OPTIGA_DATA_LEN_OFFSET]);
 }
 
 u16_t optiga_data_frame_get_len(u8_t *frame_start)
 {
-	u16_t len = frame_start[OPTIGA_DATA_LEN_OFFSET] << 8;
-	len |= frame_start[OPTIGA_DATA_LEN_OFFSET + 1];
-	return len;
+	return sys_get_be16(&frame_start[OPTIGA_DATA_LEN_OFFSET]);
 }
 
 void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8_t frame_ack)
@@ -114,8 +112,7 @@ void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
 {
 	u16_t fcs = optiga_data_frame_calc_fcs(frame_start, len);
 	/* Chapter 3.3 says, order of FCS is: Low Byte || High Byte */
-	frame_start[len] = fcs >> 8;
-	frame_start[len + 1] = fcs;
+	sys_put_be16(fcs, &frame_start[len]);
 }
 
 
