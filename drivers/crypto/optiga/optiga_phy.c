@@ -94,19 +94,16 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	return res;
 }
 
-int optiga_reg_write(struct device *dev, u8_t addr, const u8_t *data, size_t len)
+int optiga_reg_write(struct device *dev, u8_t addr, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
-	u8_t *reg_write_buf = driver->phy.reg_write_buf;
 
 	if (len > (CONFIG_OPTIGA_HOST_BUFFER_SIZE - 1)) {
 		LOG_DBG("Not enough memory for write buffer");
 		return -ENOMEM;
 	}
 
-	*reg_write_buf = addr;
-	reg_write_buf++;
-	memcpy(reg_write_buf, data, len);
+	driver->phy.reg_write_buf[0] = addr;
 
 	return optiga_delayed_ack_write(dev, driver->phy.reg_write_buf, len + 1);
 }
@@ -141,24 +138,38 @@ bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
 	return tmp_rdy;
 }
 
-int optiga_soft_reset(struct device *dev) {
-	static const u8_t reset_cmd[] = {0x00, 0x00};
-	BUILD_ASSERT_MSG((sizeof(reset_cmd) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
-			"Host buffer too small for basic command");
+inline u8_t *optiga_phy_data_buf(struct device *dev, size_t *len)
+{
+	struct optiga_data *driver = dev->driver_data;
+	if(len) {
+		*len = driver->phy.data_reg_len;
+	}
 
+	return driver->phy.reg_write_buf + OPTIGA_PHY_HEADER_LEN;
+}
+
+
+int optiga_soft_reset(struct device *dev) {
+	/* ensure host buffer is big enough for reset command */
+	BUILD_ASSERT_MSG((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
+			"Host buffer too small for essential command");
+
+	u8_t* tx_buf = optiga_phy_data_buf(dev, NULL);
+	sys_put_be16(0, tx_buf);
 
 	LOG_DBG("Performing soft reset");
-	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, reset_cmd, sizeof(reset_cmd));
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
 }
 
 /* Can not use optiga_reg_write because the send buffer might not be setup correctly */
 int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len) {
-	u8_t cmd[2];
-	BUILD_ASSERT_MSG((sizeof(cmd) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
-			"Host buffer too small for basic command");
+	/* ensure host buffer is big enough for DATA_REG_LEN command */
+	BUILD_ASSERT_MSG((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
+			"Host buffer too small for essential command");
 
-	sys_put_be16(data_reg_len, cmd);
-	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, cmd, sizeof(cmd));
+	u8_t* tx_buf = optiga_phy_data_buf(dev, NULL);
+	sys_put_be16(data_reg_len, tx_buf);
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
 }
 
 int optiga_get_data_reg_len(struct device *dev, u16_t* data_reg_len) {
@@ -298,23 +309,15 @@ int optiga_phy_read_data(struct device *dev, u8_t *data, size_t *len, u8_t *flag
 	return 0;
 }
 
-int optiga_phy_write_data(struct device *dev, const u8_t *data, size_t len)
+int optiga_phy_write_data(struct device *dev, size_t len)
 {
-	__ASSERT(data, "Invalid NULL pointer");
-
 	if(!optiga_poll_status(dev, OPTIGA_REG_I2C_STATE_BUSY, 0)) {
 		optiga_get_i2c_state(dev, NULL, NULL);
 		LOG_ERR("BUSY flag not cleared");
 		return -EIO;
 	}
 
-	LOG_HEXDUMP_DBG(data, len, "PHY write:");
+	LOG_HEXDUMP_DBG(((struct optiga_data *) dev->driver_data)->phy.reg_write_buf, len, "PHY write:");
 
-	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, data, len);
-}
-
-inline u16_t optiga_phy_get_data_reg_len(struct device *dev)
-{
-	struct optiga_data *driver = dev->driver_data;
-	return driver->phy.data_reg_len;
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, len);
 }

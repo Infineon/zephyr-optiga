@@ -138,28 +138,27 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
 
 int optiga_send_sync_frame(struct device *dev)
 {
-	struct optiga_data *driver = dev->driver_data;
-	u8_t *frame = driver->data.frame_buf;
+	// TODO(chr): check length and out of bounds write
+	u8_t *frame = optiga_phy_data_buf(dev, NULL);
 	/* Assemble frame data */
 	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_RST, 0, 0);
 	optiga_data_frame_set_len(frame, 0);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
-	driver->data.frame_len = OPTIGA_DATA_CRTL_FRAME_LEN;
 
-	return optiga_phy_write_data(dev, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
+	return optiga_phy_write_data(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
 }
 
 int optiga_send_ack_frame(struct device *dev)
 {
-	struct optiga_data *driver = dev->driver_data;
-	u8_t *frame = driver->data.frame_buf;
+	// TODO(chr): check length and out of bounds write
+	u8_t *frame = optiga_phy_data_buf(dev, NULL);
 	/* Assemble frame data */
+	struct optiga_data *driver = dev->driver_data;
 	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_ACK, 0, driver->data.frame_rx_nr);
 	optiga_data_frame_set_len(frame, 0);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
-	driver->data.frame_len = OPTIGA_DATA_CRTL_FRAME_LEN;
 
-	return optiga_phy_write_data(dev, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
+	return optiga_phy_write_data(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
 }
 
 int optiga_data_is_ctrl_frame_available(struct device *dev)
@@ -244,14 +243,14 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 /* send a packet with the correct framing */
 int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
 {
-	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
-	if((len + DATA_LINK_OVERHEAD) > data_reg_len) {
+	size_t max_frame_len = 0;
+	u8_t * const frame = optiga_phy_data_buf(dev, &max_frame_len);
+	if((len + DATA_LINK_OVERHEAD) > max_frame_len) {
 		LOG_ERR("Packet too big");
 		return -EINVAL;
 	}
 
 	struct optiga_data *driver = dev->driver_data;
-	u8_t * const frame = driver->data.frame_buf;
 	u8_t * const frame_nr = &driver->data.frame_tx_nr;
 	u8_t * const frame_ack = &driver->data.frame_rx_nr;
 
@@ -261,9 +260,8 @@ int optiga_data_send_packet(struct device *dev, const u8_t *packet, size_t len)
 	/* Copy packet data */
 	memcpy(frame + OPTIGA_DATA_PACKET_START_OFFSET, packet, len);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET + len);
-	driver->data.frame_len = len + DATA_LINK_OVERHEAD;
 
-	int res = optiga_phy_write_data(dev, frame, driver->data.frame_len);
+	int res = optiga_phy_write_data(dev, len + DATA_LINK_OVERHEAD);
 	if (res != 0) {
 		LOG_ERR("Can't send data to phy");
 		return res;
@@ -389,7 +387,8 @@ int optiga_data_recv_packet(struct device *dev, u8_t *data, size_t *data_len)
 
 u16_t optiga_data_get_max_packet_size(struct device *dev)
 {
-	u16_t data_reg_len = optiga_phy_get_data_reg_len(dev);
+	size_t data_reg_len = 0;
+	optiga_phy_data_buf(dev, &data_reg_len);
 	__ASSERT(data_reg_len > DATA_LINK_OVERHEAD, "Packet too small");
 	return data_reg_len - DATA_LINK_OVERHEAD;
 }

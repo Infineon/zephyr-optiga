@@ -339,7 +339,7 @@ void main(void)
 
 	while(true) {
 		read_status();
-		k_sleep(500);
+		k_sleep(1000);
 	}
 
 
