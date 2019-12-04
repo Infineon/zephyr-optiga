@@ -17,7 +17,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga);
 
-#define OPTIGA_STACK_SIZE 1024
+#define OPTIGA_STACK_SIZE 512
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 void optiga_worker(void* arg1, void *arg2, void *arg3);
