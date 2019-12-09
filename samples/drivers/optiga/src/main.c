@@ -202,8 +202,10 @@ void get_data_object_queued()
 
 	k_poll(events, 1, K_FOREVER);
 
-	if(get_do_txrx.status_code != 0x00) {
-		LOG_INF("Error Code: 0x%02x", get_do_txrx.status_code);
+	int result_code = events[0].signal->result;
+
+	if(result_code != 0) {
+		LOG_INF("Error Code: %d", result_code);
 		return;
 	}
 

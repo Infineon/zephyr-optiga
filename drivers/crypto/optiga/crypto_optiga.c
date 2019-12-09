@@ -22,6 +22,8 @@ LOG_MODULE_REGISTER(optiga);
 #define OPTIGA_THREAD_PRIORITY 1
 void optiga_worker(void* arg1, void *arg2, void *arg3);
 
+#define OPTIGA_GET_ERROR_RESPONSE_LEN 5
+/* GetDataObject command with a special data object storing the error code */
 static const u8_t error_code_apdu[] =
 {
 	0x01, /* get DataObject, don't clear error code because we want to read it */
@@ -32,20 +34,21 @@ static const u8_t error_code_apdu[] =
 	0x00, 0x01, /* all error codes are 1 byte */
 };
 
+#define OPTIGA_OPEN_APPLICATION_RESPONSE_LEN 4
+static const u8_t optiga_open_application_apdu[] =
+{
+	0xF0, /* command code */
+	0x00, /* clean context */
+	0x00, 0x10, /* 16 bytes parameter */
+	/* unique application identifier */
+	0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
+};
+
 /*
  * Initializes the application on the OPTIGA chip
  */
 static int optiga_open_application(struct device *dev)
 {
-	static const u8_t optiga_open_application_apdu[] =
-	{
-		0xF0, /* command code */
-		0x00, /* clean context */
-		0x00, 0x10, /* 16 bytes parameter */
-		/* unique application identifier */
-		0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
-	};
-
 	int res = optiga_nettran_send_apdu(dev,
 		optiga_open_application_apdu,
 		sizeof(optiga_open_application_apdu));
@@ -54,17 +57,16 @@ static int optiga_open_application(struct device *dev)
 		return res;
 	}
 
-	// TODO: reduce buffer size once the communication stack overhead has been eliminated
-	u8_t tmp_buf[16] = {0};
-	size_t tmp_buf_len = 16;
+	u8_t tmp_buf[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = {0};
+	size_t tmp_buf_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
 	/* Expected response to "OpenApplication" */
-	const u8_t resp[4] = {0};
-	const size_t resp_len = 4;
+	static const u8_t resp[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = {0};
+	static const size_t resp_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
 	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (res != 0) {
-		LOG_INF("Failed to OpenApplication APDU response");
+		LOG_INF("Failed to get OpenApplication APDU response");
 		return res;
 	}
 
@@ -89,9 +91,8 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 		return res;
 	}
 
-	// TODO: reduce buffer size once the communication stack overhead has been eliminated
-	u8_t tmp_buf[16] = {0};
-	size_t tmp_buf_len = 16;
+	u8_t tmp_buf[OPTIGA_GET_ERROR_RESPONSE_LEN] = {0};
+	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
 
 
 	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
@@ -101,7 +102,7 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	}
 
 	/* Expected APDU return length is always 5 */
-	if (tmp_buf_len != 5) {
+	if (tmp_buf_len != OPTIGA_GET_ERROR_RESPONSE_LEN) {
 		LOG_ERR("Unexpected response length");
 		return -EIO;
 	}
@@ -190,45 +191,37 @@ void optiga_worker(void* arg1, void *arg2, void *arg3)
 		struct optiga_apdu *apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
 		__ASSERT(apdu, "Unexpected NULL pointer");
 
-		int res = optiga_nettran_send_apdu(dev,
-			apdu->tx_buf,
-			apdu->tx_len);
+		int res = optiga_nettran_send_apdu(dev,	apdu->tx_buf, apdu->tx_len);
 		if(res != 0) {
 			LOG_ERR("Failed to send APDU");
-			// TODO(chr): define error codes
-			apdu->status_code = 0x01;
-			k_poll_signal_raise(&apdu->finished, 0);
+			k_poll_signal_raise(&apdu->finished, res);
 			continue;
 		}
 
 		res = optiga_nettran_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
 		if (res != 0) {
 			LOG_ERR("Failed to receive APDU");
-			// TODO(chr): define error codes
-			apdu->status_code = 0x01;
-			k_poll_signal_raise(&apdu->finished, 0);
+			k_poll_signal_raise(&apdu->finished, res);
 			continue;
 		}
 
 		/* Check if an error occured and retrieve it */
 		__ASSERT(apdu->rx_len > 0, "Not enough bytes in APDU");
 		if(apdu->rx_buf[0] != 0x00) {
-			res = optiga_get_error_code(dev, &apdu->status_code);
+			u8_t optiga_err_code = 0;
+			res = optiga_get_error_code(dev, &optiga_err_code);
 			if (res != 0) {
 				LOG_ERR("Failed to receive Error Code");
-				// TODO(chr): define error codes
-				apdu->status_code = 0x01;
-				k_poll_signal_raise(&apdu->finished, 0);
+				k_poll_signal_raise(&apdu->finished, res);
 				continue;
 			}
 
 			// TODO(chr): define error codes
-			k_poll_signal_raise(&apdu->finished, 0);
+			k_poll_signal_raise(&apdu->finished, optiga_err_code);
 			continue;
 		}
 
-		apdu->status_code = 0x00;
-		k_poll_signal_raise(&apdu->finished, 0);
+		k_poll_signal_raise(&apdu->finished, OPTIGA_STATUS_CODE_SUCCESS);
 	}
 };
 

@@ -75,9 +75,10 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 	};
 
 	k_poll(events, 1, K_FOREVER);
+	int result_code = events[0].signal->result;
 
-	if(ctx->apdu.status_code != 0x00) {
-		LOG_INF("GetDataObject Error Code: 0x%02x", ctx->apdu.status_code);
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("GetDataObject Error Code: %d", result_code);
 		return -EIO;
 	}
 
@@ -157,8 +158,10 @@ int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, c
 
 	k_poll(events, 1, K_FOREVER);
 
-	if(ctx->apdu.status_code != 0x00) {
-		LOG_INF("GetDataObject Error Code: 0x%02x", ctx->apdu.status_code);
+	int result_code = events[0].signal->result;
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("SetDataObject Error Code: %d", result_code);
 		return -EIO;
 	}
 
