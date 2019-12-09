@@ -115,75 +115,88 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 
 int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 {
+	// TODO(chr): add checks for out-of-bounds writes in `data`
 	__ASSERT(data, "Invalid NULL pointer");
 	__ASSERT(len, "Invalid NULL pointer");
 
-	size_t buf_len = *len;
-
-	/* TODO: receive buffer must provide space for data + header */
-	int res = optiga_data_recv_packet(dev, data, len);
-
+	size_t buf_len = 0;
+	int res = optiga_data_recv_packet(dev, &buf_len);
 	if (res < 0) {
 		LOG_ERR("Failed to read DATA");
 		return res;
 	}
 
-	u8_t chain = optiga_nettran_get_chain(data);
+	/* Ensure there are enough bytes for header + data */
+	__ASSERT(buf_len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
+
+	size_t max_packet_size = 0;
+	u8_t *buf = optiga_data_packet_buf(dev, &max_packet_size);
+
+	u8_t chain = optiga_nettran_get_chain(buf);
 
 	if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_NONE) {
 		/* No chaining */
-		/* Ensure there are enough bytes for header + data */
-		__ASSERT(*len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
-
 		/* remove Header */
-		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-		memmove(data, data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+		buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		if (*len < buf_len) {
+			return -ENOMEM;
+		}
+
+		*len = buf_len;
+		memcpy(data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
 
 		return 0;
 	} else if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_FIRST) {
 		/* chaining, first packet */
 
-		/* Ensure there are enough bytes for header + data */
-		__ASSERT(*len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
-		size_t max_packet_size = 0;
-		optiga_data_packet_buf(dev, &max_packet_size);
-
 		/* remove Header */
-		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-		memmove(data, data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+		buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		if (*len < buf_len) {
+			return -ENOMEM;
+		}
 
-		size_t cur_len = *len;
+		memcpy(data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
+
+		size_t cur_len = buf_len;
 		u8_t *cur_data = data + cur_len;
-		*len = buf_len - cur_len;
+		buf_len = 0;
 
-		res = optiga_data_recv_packet(dev, cur_data, len);
+		res = optiga_data_recv_packet(dev, &buf_len);
 		if (res != 0) {
 			LOG_ERR("Failed to read DATA");
 			return res;
 		}
 
-		chain = optiga_nettran_get_chain(cur_data);
+		/* Ensure there are enough bytes for header + data */
+		__ASSERT(buf_len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
+
+		buf = optiga_data_packet_buf(dev, NULL);
+		chain = optiga_nettran_get_chain(buf);
 
 		/* Intermediate packets */
 		while(chain == OPTIGA_NETTRAN_PCTR_CHAIN_INTER) {
 			/* Intermediate packets must have maximum size */
-			__ASSERT(*len == max_packet_size, "Protocol break, packet too small");
+			__ASSERT(buf_len == max_packet_size, "Protocol break, packet too small");
 
 			/* remove Header */
-			*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-			memmove(cur_data, cur_data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+			buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+			memcpy(cur_data, buf, buf_len);
 
-			cur_len += *len;
+			cur_len += buf_len;
 			cur_data = data + cur_len;
-			*len = buf_len - cur_len;
+			buf_len = 0;
 
-			res = optiga_data_recv_packet(dev, cur_data, len);
+			res = optiga_data_recv_packet(dev, &buf_len);
 			if (res != 0) {
 				LOG_ERR("Failed to read DATA");
 				return res;
 			}
 
-			chain = optiga_nettran_get_chain(cur_data);
+			/* Ensure there are enough bytes for header + data */
+			__ASSERT(buf_len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
+
+			buf = optiga_data_packet_buf(dev, NULL);
+			chain = optiga_nettran_get_chain(buf);
 		}
 
 		if (chain != OPTIGA_NETTRAN_PCTR_CHAIN_LAST) {
@@ -191,11 +204,14 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 			return -EIO;
 		}
 
-		/* remove Header of last packet */
-		*len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-		memmove(cur_data, cur_data + OPTIGA_NETTRAN_PACKET_OFFSET, *len);
+		/* Ensure there are enough bytes for header + data */
+		__ASSERT(buf_len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
 
-		cur_len += *len;
+		/* remove Header of last packet */
+		buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		memcpy(cur_data, buf, buf_len);
+
+		cur_len += buf_len;
 		*len = cur_len;
 
 		return 0;
