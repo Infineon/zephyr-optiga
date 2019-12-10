@@ -29,4 +29,11 @@ void cmds_trust_x_free(struct cmds_ctx *ctx);
 int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
 int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, const u8_t *buf, size_t len);
 
+#define CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN 64
+#define CMDS_TRUSTX_NIST_P384_SIGNATURE_LEN 96
+
+int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, u8_t *pub_key, size_t *pub_key_len);
+int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
+int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
+
 #endif /* CMDS_TRUST_X_H_ */
