@@ -315,7 +315,7 @@ int optiga_phy_write_data(struct device *dev, size_t len)
 		return -EIO;
 	}
 
-	LOG_HEXDUMP_DBG(((struct optiga_data *) dev->driver_data)->phy.reg_write_buf, len, "PHY write:");
+	LOG_HEXDUMP_DBG(((struct optiga_data *) dev->driver_data)->phy.reg_write_buf, len + OPTIGA_PHY_HEADER_LEN, "PHY write:");
 
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, len);
 }
