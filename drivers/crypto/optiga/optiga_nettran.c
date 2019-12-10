@@ -180,7 +180,7 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 			/* remove Header */
 			buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-			memcpy(cur_data, buf, buf_len);
+			memcpy(cur_data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
 
 			cur_len += buf_len;
 			cur_data = data + cur_len;
@@ -209,7 +209,7 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 		/* remove Header of last packet */
 		buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
-		memcpy(cur_data, buf, buf_len);
+		memcpy(cur_data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
 
 		cur_len += buf_len;
 		*len = cur_len;
