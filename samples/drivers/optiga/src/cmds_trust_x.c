@@ -390,11 +390,13 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 			if(*pub_key_len < CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN) {
 				return -EINVAL;
 			}
+			*pub_key_len = CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN;
 			break;
 		case CMDS_TRUSTX_ALGORITHM_NIST_P384:
 			if(*pub_key_len < CMDS_TRUSTX_NIST_P384_PUB_KEY_LEN) {
 				return -EINVAL;
 			}
+			*pub_key_len = CMDS_TRUSTX_NIST_P384_PUB_KEY_LEN;
 			break;
 		default:
 			return -EINVAL;
