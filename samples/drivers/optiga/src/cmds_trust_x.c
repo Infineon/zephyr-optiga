@@ -34,7 +34,7 @@ LOG_MODULE_REGISTER(cmds_x);
 
 static void set_tlv(u8_t *buf, u8_t tag, u16_t length, u8_t *val, size_t val_len)
 {
-	buf[0] = 0;
+	buf[0] = tag;
 	sys_put_be16(length, &buf[1]);
 	memcpy(&buf[3], val, val_len);
 }
@@ -42,7 +42,7 @@ static void set_tlv(u8_t *buf, u8_t tag, u16_t length, u8_t *val, size_t val_len
 #define SET_TLV_U8_LEN 4
 static void set_tlv_u8(u8_t *buf, u8_t tag, u16_t length, u8_t val)
 {
-	buf[0] = 0;
+	buf[0] = tag;
 	sys_put_be16(length, &buf[1]);
 	buf[3] = val;
 }
@@ -50,7 +50,7 @@ static void set_tlv_u8(u8_t *buf, u8_t tag, u16_t length, u8_t val)
 #define SET_TLV_U16_LEN 5
 static void set_tlv_u16(u8_t *buf, u8_t tag, u16_t length, u16_t val)
 {
-	buf[0] = 0;
+	buf[0] = tag;
 	sys_put_be16(length, &buf[1]);
 	sys_put_be16(val, &buf[3]);
 }
