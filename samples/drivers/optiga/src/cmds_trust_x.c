@@ -403,14 +403,32 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 	return 0;
 }
 
-int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, u8_t *pub_key, size_t *pub_key_len)
+int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg,  u8_t *pub_key, size_t *pub_key_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= 11, "APDU buffer too small");
+	__ASSERT(pub_key_len != NULL, "Invalid NULL pointer");
+
+
+	switch(alg) {
+		case CMDS_TRUSTX_ALGORITHM_NIST_P256:
+			if(*pub_key_len < CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN) {
+				return -EINVAL;
+			}
+			break;
+		case CMDS_TRUSTX_ALGORITHM_NIST_P384:
+			if(*pub_key_len < CMDS_TRUSTX_NIST_P384_PUB_KEY_LEN) {
+				return -EINVAL;
+			}
+			break;
+		default:
+			return -EINVAL;
+	}
+
 
 	cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_GEN_KEYPAIR,
-				0x03, /* Read data */
+				alg, /* Key algorithm */
 				0x09 /* Command len, see datasheet Table 19 */);
 
 	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
@@ -462,6 +480,15 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, u8_t *pub_key, s
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 
+	rx_buf += OPTIGA_TRUSTX_OUT_DATA_OFFSET;
+	__ASSERT(rx_buf[0] == 0x02, "Received Key not a pub key");
+
+	// TODO(chr): decide if we can skip ASN.1 decoding
+	/* the following decoding routine only works if the public key has a fixed length */
+	__ASSERT(out_len == (*pub_key_len + 7), "Assumption about pub key encoding was wrong");
+	rx_buf += 3; // skip tag and length
+	rx_buf += 4; // skip ASN.1 tag, length and 2 value bytes
+	memcpy(pub_key, rx_buf, *pub_key_len);
 
 	return 0;
 }

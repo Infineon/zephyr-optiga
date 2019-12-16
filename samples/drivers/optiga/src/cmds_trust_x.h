@@ -32,7 +32,16 @@ int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, c
 #define CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN 64
 #define CMDS_TRUSTX_NIST_P384_SIGNATURE_LEN 96
 
-int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, u8_t *pub_key, size_t *pub_key_len);
+#define CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN 64
+#define CMDS_TRUSTX_NIST_P384_PUB_KEY_LEN 96
+
+enum CMDS_TRUSTX_ALGORITHM {
+	CMDS_TRUSTX_ALGORITHM_NIST_P256 = 0x03,
+	CMDS_TRUSTX_ALGORITHM_NIST_P384 = 0x04,
+	CMDS_TRUSTX_ALGORITHM_SHA256	= 0xE2
+};
+
+int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg, u8_t *pub_key, size_t *pub_key_len);
 int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
 int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
 

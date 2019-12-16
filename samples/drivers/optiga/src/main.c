@@ -397,10 +397,17 @@ void main(void)
 		LOG_INF("VERIFY FAIL");
 	}
 
+	u8_t pub_key[CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN] = {0};
+	size_t pub_key_len = CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN;
+
+	time_stamp = k_uptime_get();
+	res = cmds_trust_x_gen_key_ecdsa(&ctx, 0xE100, CMDS_TRUSTX_ALGORITHM_NIST_P256, pub_key, &pub_key_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+	LOG_INF("cmds_trust_x_gen_key_ecdsa res: %d, %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(pub_key, CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN, "Pub Key:");
+
 	while(true) {
 		read_status();
 		k_sleep(1000);
 	}
-
-
 }
