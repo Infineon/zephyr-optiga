@@ -377,16 +377,20 @@ void main(void)
 	u8_t digest[32] = {0};
 	u8_t signature[CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN] = {0};
 
+	s64_t time_stamp = k_uptime_get();
 	res = cmds_trust_x_sign_ecdsa(&ctx, 0xE0F0, digest, 32, signature, CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN);
-	LOG_INF("cmds_trust_x_sign_ecdsa res: %d", res);
+	s32_t milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("cmds_trust_x_sign_ecdsa res: %d, %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(signature, CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN, "Signature:");
 
 	k_sleep(100);
 
-
+	time_stamp = k_uptime_get();
 	res = cmds_trust_x_verify_ecdsa_oid(&ctx, 0xE0E1, digest, 32, signature, CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN);
-	LOG_INF("cmds_trust_x_verify_ecdsa_oid res: %d", res);
-	k_sleep(100);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("cmds_trust_x_verify_ecdsa_oid res: %d, %d ms", res, milliseconds_spent);
 	if(res == 0) {
 		LOG_INF("VERIFY OK");
 	} else {
