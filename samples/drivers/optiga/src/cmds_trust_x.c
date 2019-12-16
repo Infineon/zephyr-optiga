@@ -86,6 +86,20 @@ static void cmds_get_apdu_header(u8_t *buf, u8_t *sta, u16_t *out_len)
 	}
 }
 
+int cmds_submit_apdu(struct cmds_ctx *ctx)
+{
+	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
+
+	struct k_poll_event events[1] = {
+        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+                                 K_POLL_MODE_NOTIFY_ONLY,
+                                 &ctx->apdu.finished),
+	};
+
+	k_poll(events, 1, K_FOREVER);
+	return events[0].signal->result;
+}
+
 #define OPTIGA_GET_DATA_CMD_LEN 10
 int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
 {
@@ -120,16 +134,7 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 	ctx->apdu.rx_buf = ctx->apdu_buf;
 	ctx->apdu.rx_len = ctx->apdu_buf_len;
 
-	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
-
-	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &ctx->apdu.finished),
-	};
-
-	k_poll(events, 1, K_FOREVER);
-	int result_code = events[0].signal->result;
+	int result_code = cmds_submit_apdu(ctx);
 
 	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
 		LOG_INF("GetDataObject Error Code: %d", result_code);
@@ -193,17 +198,7 @@ int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, c
 	ctx->apdu.rx_buf = tx_buf;
 	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
 
-	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
-
-	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &ctx->apdu.finished),
-	};
-
-	k_poll(events, 1, K_FOREVER);
-
-	int result_code = events[0].signal->result;
+	int result_code = cmds_submit_apdu(ctx);
 
 	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
 		LOG_INF("SetDataObject Error Code: %d", result_code);
@@ -258,17 +253,7 @@ int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest,
 	ctx->apdu.rx_buf = tx_buf;
 	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
 
-	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
-
-	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &ctx->apdu.finished),
-	};
-
-	k_poll(events, 1, K_FOREVER);
-
-	int result_code = events[0].signal->result;
+	int result_code = cmds_submit_apdu(ctx);
 
 	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
 		LOG_INF("SetDataObject Error Code: %d", result_code);
@@ -368,17 +353,7 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 	ctx->apdu.rx_buf = tx_buf;
 	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
 
-	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
-
-	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &ctx->apdu.finished),
-	};
-
-	k_poll(events, 1, K_FOREVER);
-
-	int result_code = events[0].signal->result;
+	int result_code = cmds_submit_apdu(ctx);
 
 	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
 		LOG_INF("SetDataObject Error Code: %d", result_code);
@@ -450,16 +425,7 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 	ctx->apdu.rx_buf = ctx->apdu_buf;
 	ctx->apdu.rx_len = ctx->apdu_buf_len;
 
-	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
-
-	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &ctx->apdu.finished),
-	};
-
-	k_poll(events, 1, K_FOREVER);
-	int result_code = events[0].signal->result;
+	int result_code = cmds_submit_apdu(ctx);
 
 	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
 		LOG_INF("GetDataObject Error Code: %d", result_code);
