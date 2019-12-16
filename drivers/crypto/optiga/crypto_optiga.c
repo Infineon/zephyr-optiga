@@ -20,7 +20,9 @@ LOG_MODULE_REGISTER(optiga);
 #define OPTIGA_STACK_SIZE 512
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
-void optiga_worker(void* arg1, void *arg2, void *arg3);
+#define OPTIGA_MAX_RESET 3
+
+static void optiga_worker(void* arg1, void *arg2, void *arg3);
 
 #define OPTIGA_GET_ERROR_RESPONSE_LEN 5
 /* GetDataObject command with a special data object storing the error code */
@@ -33,6 +35,9 @@ static const u8_t error_code_apdu[] =
 	0x00, 0x00, /* Offset */
 	0x00, 0x01, /* all error codes are 1 byte */
 };
+
+#define OPTIGA_APDU_STA_OFFSET 0
+#define OPTIGA_APDU_STA_SUCCESS 0
 
 #define OPTIGA_OPEN_APPLICATION_RESPONSE_LEN 4
 static const u8_t optiga_open_application_apdu[] =
@@ -49,12 +54,12 @@ static const u8_t optiga_open_application_apdu[] =
  */
 static int optiga_open_application(struct device *dev)
 {
-	int res = optiga_nettran_send_apdu(dev,
+	int err = optiga_nettran_send_apdu(dev,
 		optiga_open_application_apdu,
 		sizeof(optiga_open_application_apdu));
-	if(res != 0) {
+	if(err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
-		return res;
+		return err;
 	}
 
 	u8_t tmp_buf[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = {0};
@@ -64,10 +69,10 @@ static int optiga_open_application(struct device *dev)
 	static const u8_t resp[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = {0};
 	static const size_t resp_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
-	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
-	if (res != 0) {
+	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
-		return res;
+		return err;
 	}
 
 	if(resp_len != tmp_buf_len || memcmp(tmp_buf, resp, resp_len)) {
@@ -83,22 +88,22 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	__ASSERT(dev, "Invalid NULL pointer");
 	__ASSERT(err_code, "Invalid NULL pointer");
 
-	int res = optiga_nettran_send_apdu(dev,
+	int err = optiga_nettran_send_apdu(dev,
 		error_code_apdu,
 		sizeof(error_code_apdu));
-	if(res != 0) {
+	if(err != 0) {
 		LOG_ERR("Failed to send Error Code APDU");
-		return res;
+		return err;
 	}
 
 	u8_t tmp_buf[OPTIGA_GET_ERROR_RESPONSE_LEN] = {0};
 	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
 
 
-	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
-	if (res != 0) {
+	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (err != 0) {
 		LOG_INF("Failed to get Error Code APDU response");
-		return res;
+		return err;
 	}
 
 	/* Expected APDU return length is always 5 */
@@ -122,19 +127,8 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	return 0;
 }
 
-int optiga_init(struct device *dev)
+static int optiga_reset(struct device *dev)
 {
-	LOG_DBG("Init OPTIGA");
-
-	const struct optiga_cfg *config = dev->config->config_info;
-	struct optiga_data *data = dev->driver_data;
-
-	data->i2c_master = device_get_binding(config->i2c_dev_name);
-	if (data->i2c_master == NULL) {
-		LOG_ERR("Failed to get I2C device");
-		return -EINVAL;
-	}
-
 	int err = optiga_phy_init(dev);
 	if(err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA phy layer");
@@ -156,6 +150,28 @@ int optiga_init(struct device *dev)
 	err = optiga_open_application(dev);
 	if(err != 0) {
 		LOG_ERR("Failed to open the OPTIGA application");
+		return err;
+	}
+
+	return err;
+}
+
+int optiga_init(struct device *dev)
+{
+	LOG_DBG("Init OPTIGA");
+
+	const struct optiga_cfg *config = dev->config->config_info;
+	struct optiga_data *data = dev->driver_data;
+
+	data->reset_counter = 0;
+	data->i2c_master = device_get_binding(config->i2c_dev_name);
+	if (data->i2c_master == NULL) {
+		LOG_ERR("Failed to get I2C device");
+		return -EINVAL;
+	}
+
+	int err = optiga_reset(dev);
+	if(err != 0) {
 		return err;
 	}
 
@@ -181,7 +197,29 @@ static int enqueue_apdu(struct device *dev, struct optiga_apdu *apdu)
 	return 0;
 }
 
-void optiga_worker(void* arg1, void *arg2, void *arg3)
+static int optiga_transfer_apdu(struct device *dev, struct optiga_apdu *apdu)
+{
+	int err = optiga_nettran_send_apdu(dev,	apdu->tx_buf, apdu->tx_len);
+	if(err != 0) {
+		LOG_ERR("Failed to send APDU");
+		return err;
+	}
+
+	err = optiga_nettran_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
+	if (err != 0) {
+		LOG_ERR("Failed to receive APDU");
+		return err;
+	}
+
+	return err;
+}
+
+static bool optiga_apdu_is_error(u8_t *apdu_start)
+{
+	return apdu_start[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS;
+}
+
+static void optiga_worker(void* arg1, void *arg2, void *arg3)
 {
 	struct device *dev = arg1;
 	struct optiga_data *data = dev->driver_data;
@@ -189,34 +227,52 @@ void optiga_worker(void* arg1, void *arg2, void *arg3)
 	/* execute forevever */
 	while (true) {
 		struct optiga_apdu *apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
-		__ASSERT(apdu, "Unexpected NULL pointer");
-
-		int res = optiga_nettran_send_apdu(dev,	apdu->tx_buf, apdu->tx_len);
-		if(res != 0) {
-			LOG_ERR("Failed to send APDU");
-			k_poll_signal_raise(&apdu->finished, res);
+		if (data->reset_counter > OPTIGA_MAX_RESET) {
+			/* Return an error for all further requests */
+			LOG_ERR("Maximum OPTIGA reset count reached");
+			k_poll_signal_raise(&apdu->finished, -EIO);
 			continue;
 		}
 
-		res = optiga_nettran_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
-		if (res != 0) {
-			LOG_ERR("Failed to receive APDU");
-			k_poll_signal_raise(&apdu->finished, res);
+		/* Try to send an APDU to the OPTIGA */
+		int err = optiga_transfer_apdu(dev, apdu);
+		if (err != 0) {
+			/* Transfer failed, try to reset the device */
+			data->reset_counter++;
+			LOG_ERR("APDU transfer failed, reseting OPTIGA, try: %d", data->reset_counter);
+			err = optiga_reset(dev);
+			if(err != 0) {
+				/* If reset fails, something is seriously wrong */
+				LOG_ERR("Failed to reset OPTIGA");
+			}
+
+			/*
+			 * After a reset we need to invalidate all commands in the queue,
+			 * because they might use a session context, which is cleared on reset
+			 */
+			while(apdu != NULL) {
+				k_poll_signal_raise(&apdu->finished, -EIO);
+				apdu = k_fifo_get(&data->apdu_queue, K_NO_WAIT);
+			}
+
 			continue;
+		} else {
+			/* Successfull transfer, if a problem existed it's solved now */
+			data->reset_counter = 0;
 		}
 
 		/* Check if an error occured and retrieve it */
 		__ASSERT(apdu->rx_len > 0, "Not enough bytes in APDU");
-		if(apdu->rx_buf[0] != 0x00) {
+		bool apdu_error = optiga_apdu_is_error(apdu->rx_buf);
+		if(apdu_error) {
 			u8_t optiga_err_code = 0;
-			res = optiga_get_error_code(dev, &optiga_err_code);
-			if (res != 0) {
+			err = optiga_get_error_code(dev, &optiga_err_code);
+			if (err != 0) {
 				LOG_ERR("Failed to receive Error Code");
-				k_poll_signal_raise(&apdu->finished, res);
+				k_poll_signal_raise(&apdu->finished, err);
 				continue;
 			}
 
-			// TODO(chr): define error codes
 			k_poll_signal_raise(&apdu->finished, optiga_err_code);
 			continue;
 		}

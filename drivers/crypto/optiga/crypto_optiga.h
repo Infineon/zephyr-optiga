@@ -19,6 +19,7 @@ struct optiga_data {
 	struct k_fifo apdu_queue;
 	struct k_thread worker;
 	k_thread_stack_t *worker_stack;
+	int reset_counter;
 };
 
 struct optiga_cfg {
