@@ -36,7 +36,7 @@ enum {
 
 /* Length of a sync frame is fixed */
 #define OPTIGA_DATA_CRTL_FRAME_LEN (OPTIGA_DATA_FCTR_LEN + OPTIGA_DATA_LEN_LEN + OPTIGA_DATA_FCS_LEN)
-#if DATA_REG_LEN < OPTIGA_DATA_CRTL_FRAME_LEN
+#if OPTIGA_PHY_DATA_REG_LEN < OPTIGA_DATA_CRTL_FRAME_LEN
 #error "Can't fit smallest frame in send buffer"
 #endif
 

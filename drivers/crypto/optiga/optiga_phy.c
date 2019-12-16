@@ -8,6 +8,14 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga_phy);
 
+/* Protocol limits from Table 2-1 */
+#define OPTIGA_DATA_REG_LEN_MAX 0xFFFF
+#define OPTIGA_DATA_REG_LEN_MIN 0x10
+
+#if OPTIGA_PHY_DATA_REG_LEN < OPTIGA_DATA_REG_LEN_MIN || OPTIGA_PHY_DATA_REG_LEN > OPTIGA_DATA_REG_LEN_MAX
+#error "DATA_REG_LEN outside protocol limits"
+#endif
+
 /* Register addresses as per protocol specification Table 2-1 */
 #define OPTIGA_REG_ADDR_DATA			0x80
 #define OPTIGA_REG_ADDR_DATA_REG_LEN		0x81
@@ -23,7 +31,7 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_DELAYED_ACK_TRIES 10
 #define OPTIGA_DELAYED_ACK_TIME_MS 10
 
-#define OPTIGA_STATUS_POLL_TRIES 10
+#define OPTIGA_STATUS_POLL_TRIES 20
 #define OPTIGA_STATUS_POLL_TIME_MS 10
 
 /* highest byte of the I2C_STATE register */
@@ -103,9 +111,9 @@ int optiga_reg_write(struct device *dev, u8_t addr, size_t len)
 		return -ENOMEM;
 	}
 
-	driver->phy.reg_write_buf[0] = addr;
+	driver->phy.host_buf[0] = addr;
 
-	return optiga_delayed_ack_write(dev, driver->phy.reg_write_buf, len + 1);
+	return optiga_delayed_ack_write(dev, driver->phy.host_buf, len + 1);
 }
 
 /* Poll until BUSY flag is cleared or timeout */
@@ -145,7 +153,7 @@ inline u8_t *optiga_phy_data_buf(struct device *dev, size_t *len)
 		*len = driver->phy.data_reg_len;
 	}
 
-	return driver->phy.reg_write_buf + OPTIGA_PHY_HEADER_LEN;
+	return driver->phy.host_buf + OPTIGA_PHY_HEADER_LEN;
 }
 
 
@@ -200,9 +208,9 @@ int optiga_negotiate_data_reg_len(struct device *dev) {
 		return -EINVAL;
 	}
 
-	if (data_reg_len > DATA_REG_LEN) {
+	if (data_reg_len > OPTIGA_PHY_DATA_REG_LEN) {
 		/* reduce device value to our maximum value */
-		err = optiga_set_data_reg_len(dev, DATA_REG_LEN);
+		err = optiga_set_data_reg_len(dev, OPTIGA_PHY_DATA_REG_LEN);
 		if(err != 0) {
 			return err;
 		}
@@ -213,7 +221,7 @@ int optiga_negotiate_data_reg_len(struct device *dev) {
 			return err;
 		}
 
-		if (data_reg_len != DATA_REG_LEN) {
+		if (data_reg_len != OPTIGA_PHY_DATA_REG_LEN) {
 			return -EINVAL;
 		}
 	}
@@ -315,7 +323,7 @@ int optiga_phy_write_data(struct device *dev, size_t len)
 		return -EIO;
 	}
 
-	LOG_HEXDUMP_DBG(((struct optiga_data *) dev->driver_data)->phy.reg_write_buf, len + OPTIGA_PHY_HEADER_LEN, "PHY write:");
+	LOG_HEXDUMP_DBG(((struct optiga_data *) dev->driver_data)->phy.host_buf, len + OPTIGA_PHY_HEADER_LEN, "PHY write:");
 
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, len);
 }

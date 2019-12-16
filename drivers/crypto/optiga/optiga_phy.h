@@ -11,21 +11,12 @@
 
 /* 1 byte for register address on writes */
 #define OPTIGA_PHY_HEADER_LEN 1
-#define OPTIGA_PHY_BUF_SIZE (CONFIG_OPTIGA_HOST_BUFFER_SIZE - OPTIGA_PHY_HEADER_LEN)
 
-// This are the protocol limits from Table 2-1
-#define OPTIGA_DATA_REG_LEN_MAX 0xFFFF
-#define OPTIGA_DATA_REG_LEN_MIN 0x10
-
-#define DATA_REG_LEN (CONFIG_OPTIGA_HOST_BUFFER_SIZE - OPTIGA_PHY_HEADER_LEN)
-
-#if DATA_REG_LEN < OPTIGA_DATA_REG_LEN_MIN || DATA_REG_LEN > OPTIGA_DATA_REG_LEN_MAX
-#error "DATA_REG_LEN outside protocol limits"
-#endif
+#define OPTIGA_PHY_DATA_REG_LEN (CONFIG_OPTIGA_HOST_BUFFER_SIZE - OPTIGA_PHY_HEADER_LEN)
 
 struct physical_layer {
-	u16_t data_reg_len;
-	u8_t reg_write_buf[CONFIG_OPTIGA_HOST_BUFFER_SIZE];
+	u16_t data_reg_len; /* DATA_REG_LEN negotiated with OPTIGA */
+	u8_t host_buf[CONFIG_OPTIGA_HOST_BUFFER_SIZE];
 };
 
 /* Flags in I2C_STATE from protocol specification Table 2-4 */
