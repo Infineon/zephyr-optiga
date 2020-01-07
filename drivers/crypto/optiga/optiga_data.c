@@ -59,6 +59,13 @@ u16_t optiga_data_calc_fcs_core(u16_t seed, u8_t c)
 	return (((((h3 << 1) ^ h4) << 4) ^ h2) << 3) ^ h4 ^ (seed >> 8);
 }
 
+/*
+ * @brief Calculate the frame check sequence of a frame
+ *
+ * @param frame_start Beginning of the frame
+ * @param len The number of bytes in the frame without the FCS
+ * @return Two byte frame check sequence
+ */
 u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
 {
 	/* Initial seed is 0 */
@@ -71,8 +78,11 @@ u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
 }
 
 /*
- * param len is the number of bytes including the FCS
- * retval true if the FCS is correct, false else
+ * @brief Verify the frame check sequence of a frame
+ *
+ * @param frame_start Beginning of the frame
+ * @param len The number of bytes including the FCS
+ * @return true if the FCS is correct, else false
  */
 bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
 {
@@ -85,6 +95,21 @@ bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
 	u16_t recv_fcs = sys_get_be16(&frame_start[len - 2]);
 
 	return calc_fcs == recv_fcs;
+}
+
+/*
+ * @brief Append the frame check sequence
+ *
+ * @param frame_start Beginning of the frame
+ * @param len Number of bytes of frame header + data
+ *
+ * @note The provided buffer must be big enough for the additional OPTIGA_DATA_FCS_LEN bytes
+ */
+void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
+{
+	u16_t fcs = optiga_data_frame_calc_fcs(frame_start, len);
+	/* Chapter 3.3 says, order of FCS is: Low Byte || High Byte */
+	sys_put_be16(fcs, &frame_start[len]);
 }
 
 void optiga_data_frame_set_len(u8_t *frame_start, u16_t len_value)
@@ -106,15 +131,6 @@ void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8
 
 	frame_start[OPTIGA_DATA_FCTR_OFFSET] = flags | frame_nr << 2 | frame_ack;
 }
-
-/* len is the size of the frame header + packet data */
-void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
-{
-	u16_t fcs = optiga_data_frame_calc_fcs(frame_start, len);
-	/* Chapter 3.3 says, order of FCS is: Low Byte || High Byte */
-	sys_put_be16(fcs, &frame_start[len]);
-}
-
 
 bool optiga_data_is_ctrl_frame(const u8_t *frame_start)
 {
@@ -386,6 +402,15 @@ int optiga_data_init(struct device *dev)
 	return 0;
 }
 
+/*
+ * @brief Get a pointer to the packet space of the send/receive buffer
+ *
+ * @param dev Device to get the buffer
+ * @param len If not NULL, the length of the buffer is returned
+ * @return A pointer to the send/receive packet buffer of the device
+ *
+ * @note Use this way to access the send/receive buffer to avoid copying of the data.
+ */
 u8_t *optiga_data_packet_buf(struct device *dev, size_t *len)
 {
 	size_t res_len = 0;
