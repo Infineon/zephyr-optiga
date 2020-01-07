@@ -32,27 +32,31 @@ LOG_MODULE_REGISTER(cmds_x);
 #define OPTIGA_TRUSTX_OUT_LEN_OFFSET 2
 #define OPTIGA_TRUSTX_OUT_DATA_OFFSET 4
 
-static void set_tlv(u8_t *buf, u8_t tag, u16_t length, u8_t *val, size_t val_len)
+#define SET_TLV_OVERHEAD 3
+static size_t set_tlv(u8_t *buf, u8_t tag, const u8_t *val, size_t val_len)
 {
 	buf[0] = tag;
-	sys_put_be16(length, &buf[1]);
+	sys_put_be16(val_len, &buf[1]);
 	memcpy(&buf[3], val, val_len);
+	return val_len + SET_TLV_OVERHEAD;
 }
 
 #define SET_TLV_U8_LEN 4
-static void set_tlv_u8(u8_t *buf, u8_t tag, u16_t length, u8_t val)
+static size_t set_tlv_u8(u8_t *buf, u8_t tag, u16_t length, u8_t val)
 {
 	buf[0] = tag;
 	sys_put_be16(length, &buf[1]);
 	buf[3] = val;
+	return SET_TLV_U8_LEN;
 }
 
 #define SET_TLV_U16_LEN 5
-static void set_tlv_u16(u8_t *buf, u8_t tag, u16_t length, u16_t val)
+static size_t set_tlv_u16(u8_t *buf, u8_t tag, u16_t val)
 {
 	buf[0] = tag;
-	sys_put_be16(length, &buf[1]);
+	sys_put_be16(2, &buf[1]);
 	sys_put_be16(val, &buf[3]);
+	return SET_TLV_U16_LEN;
 }
 
 int cmds_trust_x_init(struct cmds_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
@@ -223,29 +227,11 @@ int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest,
 
 	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
-	/* First parameter */
-	*tx_buf = 0x01;
-	tx_buf++;
+	/* Digest to be signed */
+	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
 
-	/* Digest length */
-	sys_put_be16(digest_len, tx_buf);
-	tx_buf += 2;
-
-	/* Digest */
-	memcpy(tx_buf, digest, digest_len);
-	tx_buf += digest_len;
-
-	/* Second parameter */
-	*tx_buf = 0x03;
-	tx_buf++;
-
-	/* OID length */
-	sys_put_be16(2, tx_buf);
-	tx_buf += 2;
-
-	/* OID */
-	sys_put_be16(oid, tx_buf);
-	tx_buf += 2;
+	/* OID of signature key */
+	tx_buf += set_tlv_u16(tx_buf, 0x03, oid);
 
 	/* Setup APDU for cmd queue */
 	ctx->apdu.tx_buf = ctx->apdu_buf;
@@ -294,17 +280,8 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 
 	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
-	/* First parameter */
-	*tx_buf = 0x01;
-	tx_buf++;
-
-	/* Digest length */
-	sys_put_be16(digest_len, tx_buf);
-	tx_buf += 2;
-
 	/* Digest */
-	memcpy(tx_buf, digest, digest_len);
-	tx_buf += digest_len;
+	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
 
 	/* Second parameter */
 	*tx_buf = 0x02;
@@ -335,17 +312,8 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 					// TODO(chr): prevent overflow
 			);
 
-	/* Third parameter */
-	*tx_buf = 0x04;
-	tx_buf++;
-
-	/* OID length */
-	sys_put_be16(2, tx_buf);
-	tx_buf += 2;
-
-	/* OID */
-	sys_put_be16(oid, tx_buf);
-	tx_buf += 2;
+	/* OID of Public Key Certificate */
+	tx_buf += set_tlv_u16(tx_buf, 0x04, oid);
 
 	/* Setup APDU for cmd queue */
 	ctx->apdu.tx_buf = ctx->apdu_buf;
@@ -411,12 +379,10 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
 	/* OID */
-	set_tlv_u16(tx_buf, 0x01, 2, oid);
-	tx_buf += SET_TLV_U16_LEN;
+	tx_buf += set_tlv_u16(tx_buf, 0x01, oid);
 
 	/* Key usage identifier */
-	set_tlv_u8(tx_buf, 0x02, 1, 0x10); // TODO: export parameter for key usage flags
-	tx_buf += SET_TLV_U8_LEN;
+	tx_buf += set_tlv_u8(tx_buf, 0x02, 1, 0x10); // TODO: export parameter for key usage flags
 
 	/*
 	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
