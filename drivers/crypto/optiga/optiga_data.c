@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2019-2020 Infineon Technologies AG
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "crypto_optiga.h"
 #include "optiga_phy.h"
 #include "optiga_data.h"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Infineon Technologies AG
+ * Copyright (c) 2019-2020 Infineon Technologies AG
  *
  * SPDX-License-Identifier: Apache-2.0
  */
