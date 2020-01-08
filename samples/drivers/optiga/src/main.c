@@ -354,7 +354,15 @@ void main(void)
 
 	LOG_INF("cmds_trust_x_init res: %d", res);
 
+	/* test small reads */
+	res_len = 16;
+	res = cmds_trust_x_get_data_object(&ctx, 0xE0E0, 0, res_buf, &res_len);
+
+	LOG_INF("cmds_trust_x_get_data_object res: %d", res);
+	LOG_HEXDUMP_INF(res_buf, res_len, "Get DO small:");
+
 	/* read device certificate */
+	res_len = 900;
 	res = cmds_trust_x_get_data_object(&ctx, 0xE0E0, 0, res_buf, &res_len);
 
 	LOG_INF("cmds_trust_x_get_data_object res: %d", res);
