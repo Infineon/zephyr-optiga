@@ -152,19 +152,19 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
 int optiga_send_sync_frame(struct device *dev)
 {
 	// TODO(chr): check length and out of bounds write
-	u8_t *frame = optiga_phy_data_buf(dev, NULL);
+	u8_t *frame = optiga_phy_frame_buf(dev, NULL);
 	/* Assemble frame data */
 	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_RST, 0, 0);
 	optiga_data_frame_set_len(frame, 0);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
 
-	return optiga_phy_write_data(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
+	return optiga_phy_write_frame(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
 }
 
 int optiga_send_ack_frame(struct device *dev)
 {
 	// TODO(chr): check length and out of bounds write
-	u8_t *frame = optiga_phy_data_buf(dev, NULL);
+	u8_t *frame = optiga_phy_frame_buf(dev, NULL);
 
 	/*
 	 * Sending an ack frame would destroy the read buffer, so we backup
@@ -180,7 +180,7 @@ int optiga_send_ack_frame(struct device *dev)
 	optiga_data_frame_set_len(frame, 0);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET);
 
-	int err = optiga_phy_write_data(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
+	int err = optiga_phy_write_frame(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
 
 	/* restore previous frame content */
 	memcpy(frame, frame_bak, OPTIGA_DATA_CRTL_FRAME_LEN);
@@ -190,7 +190,7 @@ int optiga_send_ack_frame(struct device *dev)
 int optiga_data_is_ctrl_frame_available(struct device *dev)
 {
 	u16_t read_len = 0;
-	int res = optiga_get_i2c_state(dev, &read_len, NULL);
+	int res = optiga_phy_get_i2c_state(dev, &read_len, NULL);
 	if(res != 0) {
 		return res;
 	}
@@ -205,7 +205,7 @@ int optiga_data_is_ctrl_frame_available(struct device *dev)
 int optiga_data_recv_ctrl_frame(struct device *dev)
 {
 	size_t ctrl_fram_len = 0;
-	int err = optiga_phy_read_data(dev, &ctrl_fram_len);
+	int err = optiga_phy_read_frame(dev, &ctrl_fram_len);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
 		return err;
@@ -223,7 +223,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 		return -EIO;
 	}
 
-	u8_t* ctrl_frame_buf = optiga_phy_data_buf(dev, NULL);
+	u8_t* ctrl_frame_buf = optiga_phy_frame_buf(dev, NULL);
 
 	/* Check FCS */
 	bool fcs_good = optiga_data_frame_check_fcs(ctrl_frame_buf, ctrl_fram_len);
@@ -270,7 +270,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 int optiga_data_send_packet(struct device *dev, size_t len)
 {
 	size_t max_frame_len = 0;
-	u8_t * const frame = optiga_phy_data_buf(dev, &max_frame_len);
+	u8_t * const frame = optiga_phy_frame_buf(dev, &max_frame_len);
 	if((len + DATA_LINK_OVERHEAD) > max_frame_len) {
 		LOG_ERR("Packet too big");
 		return -EINVAL;
@@ -285,7 +285,7 @@ int optiga_data_send_packet(struct device *dev, size_t len)
 	optiga_data_frame_set_len(frame, len);
 	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PACKET_START_OFFSET + len);
 
-	int res = optiga_phy_write_data(dev, len + DATA_LINK_OVERHEAD);
+	int res = optiga_phy_write_frame(dev, len + DATA_LINK_OVERHEAD);
 	if (res != 0) {
 		LOG_ERR("Can't send data to phy");
 		return res;
@@ -310,7 +310,7 @@ int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 {
 	// TODO: This function has code duplication with optiga_data_recv_ctrl_frame(...)
 	size_t rx_data_len = 0;
-	int err = optiga_phy_read_data(dev, &rx_data_len);
+	int err = optiga_phy_read_frame(dev, &rx_data_len);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
 		return err;
@@ -328,7 +328,7 @@ int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 		return -EIO;
 	}
 
-	u8_t *data_buf = optiga_phy_data_buf(dev, NULL);
+	u8_t *data_buf = optiga_phy_frame_buf(dev, NULL);
 
 	/* Check FCS */
 	bool fcs_good = optiga_data_frame_check_fcs(data_buf, rx_data_len);
@@ -414,7 +414,7 @@ int optiga_data_init(struct device *dev)
 u8_t *optiga_data_packet_buf(struct device *dev, size_t *len)
 {
 	size_t res_len = 0;
-	u8_t *res_buf = optiga_phy_data_buf(dev, &res_len);
+	u8_t *res_buf = optiga_phy_frame_buf(dev, &res_len);
 	__ASSERT(res_len > DATA_LINK_OVERHEAD, "PHY layer buffer too small");
 	res_buf += OPTIGA_DATA_HEADER_LEN;
 	res_len -= DATA_LINK_OVERHEAD;
