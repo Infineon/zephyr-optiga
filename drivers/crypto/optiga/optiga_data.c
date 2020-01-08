@@ -253,7 +253,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 		LOG_DBG("Received same ACK twice");
 	} else 	{
 		LOG_ERR("Wrong frame acknowledged");
-		//return -EIO;
+		return -EIO;
 	}
 
 	bool ctrl_frame = optiga_data_is_ctrl_frame(ctrl_frame_buf);
@@ -365,13 +365,7 @@ int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 
 	bool ctrl_frame = optiga_data_is_ctrl_frame(data_buf);
 	u16_t frame_len = optiga_data_frame_get_len(data_buf);
-	if (ctrl_frame) {
-		// TODO(chr): verify against spec that this case can't happen and remove
-		LOG_DBG("Control frame");
-		__ASSERT(frame_len == 0, "Invalid frame lenght for control frame");
-		*data_len = 0;
-		return 3;
-	}
+	__ASSERT(ctrl_frame == false, "Unexpected control frame");
 
 	LOG_DBG("Data frame");
 	/* Ensure frame lenght matches */

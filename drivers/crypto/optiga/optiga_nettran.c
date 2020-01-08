@@ -121,7 +121,7 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 	size_t buf_len = 0;
 	int res = optiga_data_recv_packet(dev, &buf_len);
-	if (res < 0) {
+	if (res != 0) {
 		LOG_ERR("Failed to read DATA");
 		return res;
 	}
