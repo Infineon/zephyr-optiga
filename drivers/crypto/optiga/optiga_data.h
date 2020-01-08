@@ -9,8 +9,6 @@
 
 #include <device.h>
 
-#include "optiga_phy.h"
-
 /*
  * 1 byte  FCTR
  * 2 bytes LEN
@@ -19,8 +17,6 @@
 
 /* 2 bytes FCS */
 #define OPTIGA_DATA_TRAILER_LEN 2
-
-#define OPTIGA_DATA_BUF_SIZE (OPTIGA_PHY_BUF_SIZE - OPTIGA_DATA_HEADER_LEN - OPTIGA_DATA_TRAILER_LEN)
 
 struct data_link_layer {
 	u8_t frame_tx_nr; /* next transmit frame number */

@@ -9,8 +9,6 @@
 
 #include <device.h>
 
-#include "optiga_data.h"
-
 /* 1 byte PCTR */
 #define OPTIGA_NETTRAN_HEADER_LEN 1
 

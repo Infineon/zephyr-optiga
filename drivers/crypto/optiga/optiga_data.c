@@ -40,9 +40,6 @@ enum {
 #error "Can't fit smallest frame in send buffer"
 #endif
 
-#define OPTIG_DATA_FRAME_POLL_TIME_MS 10
-#define OPTIG_DATA_FRAME_RETRY_CNT 3
-
 #define DATA_LINK_OVERHEAD (OPTIGA_DATA_HEADER_LEN + OPTIGA_DATA_TRAILER_LEN)
 
 /*
@@ -204,21 +201,21 @@ int optiga_data_is_ctrl_frame_available(struct device *dev)
 
 int optiga_data_recv_ctrl_frame(struct device *dev)
 {
-	size_t ctrl_fram_len = 0;
-	int err = optiga_phy_read_frame(dev, &ctrl_fram_len);
+	size_t ctrl_frame_len = 0;
+	int err = optiga_phy_read_frame(dev, &ctrl_frame_len);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
 		return err;
 	}
 
-	LOG_DBG("CTRL len: %d", ctrl_fram_len);
+	LOG_DBG("CTRL len: %d", ctrl_frame_len);
 
-	if (ctrl_fram_len == 0) {
+	if (ctrl_frame_len == 0) {
 		LOG_DBG("No response available");
 		return 0;
 	}
 
-	if (ctrl_fram_len != OPTIGA_DATA_CRTL_FRAME_LEN) {
+	if (ctrl_frame_len != OPTIGA_DATA_CRTL_FRAME_LEN) {
 		LOG_ERR("Invalid frame");
 		return -EIO;
 	}
@@ -226,7 +223,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 	u8_t* ctrl_frame_buf = optiga_phy_frame_buf(dev, NULL);
 
 	/* Check FCS */
-	bool fcs_good = optiga_data_frame_check_fcs(ctrl_frame_buf, ctrl_fram_len);
+	bool fcs_good = optiga_data_frame_check_fcs(ctrl_frame_buf, ctrl_frame_len);
 	if(!fcs_good) {
 		/* TODO: handle transmission errors */
 		return -EIO;
