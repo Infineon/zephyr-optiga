@@ -54,11 +54,10 @@ enum {
  */
 u16_t optiga_data_calc_fcs_core(u16_t seed, u8_t c)
 {
-	u16_t h1, h2, h3, h4;
-	h1 = (seed ^ c) & 0xFF;
-	h2 = h1 & 0x0F;
-	h3 = (h2 << 4) ^ h1;
-	h4 = h3 >> 4;
+	u16_t h1 = (seed ^ c) & 0xFF;
+	u16_t h2 = h1 & 0x0F;
+	u16_t h3 = (h2 << 4) ^ h1;
+	u16_t h4 = h3 >> 4;
 	return (((((h3 << 1) ^ h4) << 4) ^ h2) << 3) ^ h4 ^ (seed >> 8);
 }
 
@@ -89,10 +88,7 @@ u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
  */
 bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
 {
-	if (len < OPTIGA_DATA_FCS_LEN) {
-		LOG_DBG("Not enough bytes");
-		return false;
-	}
+	__ASSERT(len < OPTIGA_DATA_FCS_LEN, "Not enough bytes");
 
 	u16_t calc_fcs = optiga_data_frame_calc_fcs(frame_start, len - 2);
 	u16_t recv_fcs = sys_get_be16(&frame_start[len - 2]);
@@ -115,12 +111,28 @@ void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
 	sys_put_be16(fcs, &frame_start[len]);
 }
 
+/*
+ * @brief Set LEN field in frame
+ *
+ * @param frame_start Beginning of the frame
+ * @param len_value Value to write into LEN field
+ *
+ * @note The provided buffer must be big enough to contain the frame header
+ */
 void optiga_data_frame_set_len(u8_t *frame_start, u16_t len_value)
 {
 	sys_put_be16(len_value, &frame_start[OPTIGA_DATA_LEN_OFFSET]);
 }
 
-u16_t optiga_data_frame_get_len(u8_t *frame_start)
+/*
+ * @brief Get LEN field from frame
+ *
+ * @param frame_start Beginning of the frame
+ * @return Value in LEN field
+ *
+ * @note The provided buffer must be big enough to contain the frame header
+ */
+u16_t optiga_data_frame_get_len(const u8_t *frame_start)
 {
 	return sys_get_be16(&frame_start[OPTIGA_DATA_LEN_OFFSET]);
 }
@@ -154,8 +166,10 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
 
 int optiga_send_sync_frame(struct device *dev)
 {
-	// TODO(chr): check length and out of bounds write
-	u8_t *frame = optiga_phy_frame_buf(dev, NULL);
+	size_t buf_len = 0;
+	u8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
+	__ASSERT(buf_len >= OPTIGA_DATA_CRTL_FRAME_LEN, "Send buffer too small for SYNC frame");
+
 	/* Assemble frame data */
 	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_RST, 0, 0);
 	optiga_data_frame_set_len(frame, 0);
@@ -166,8 +180,9 @@ int optiga_send_sync_frame(struct device *dev)
 
 int optiga_send_ack_frame(struct device *dev)
 {
-	// TODO(chr): check length and out of bounds write
-	u8_t *frame = optiga_phy_frame_buf(dev, NULL);
+	size_t buf_len = 0;
+	u8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
+	__ASSERT(buf_len >= OPTIGA_DATA_CRTL_FRAME_LEN, "Send buffer too small for ACK frame");
 
 	/*
 	 * Sending an ack frame would destroy the read buffer, so we backup

@@ -171,7 +171,6 @@ int optiga_soft_reset(struct device *dev) {
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
 }
 
-/* Can not use optiga_reg_write because the send buffer might not be setup correctly */
 int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len) {
 	/* ensure host buffer is big enough for DATA_REG_LEN command */
 	BUILD_ASSERT_MSG((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
@@ -271,8 +270,8 @@ int optiga_phy_init(struct device *dev) {
 	}
 
 	/* print the state of the device */
-	uint16_t read_len = 0;
-	uint8_t flags = 0;
+	u16_t read_len = 0;
+	u8_t flags = 0;
 	err = optiga_phy_get_i2c_state(dev, &read_len, &flags);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
@@ -304,7 +303,7 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 		return -EIO;
 	}
 
-	uint16_t read_len = 0;
+	u16_t read_len = 0;
 	int err = optiga_phy_get_i2c_state(dev, &read_len, NULL);
 	if (err != 0) {
 		LOG_ERR("Failed to get data length");

@@ -121,7 +121,6 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 
 int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 {
-	// TODO(chr): add checks for out-of-bounds writes in `data`
 	__ASSERT(data, "Invalid NULL pointer");
 	__ASSERT(len, "Invalid NULL pointer");
 
@@ -186,9 +185,14 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 			/* remove Header */
 			buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+			cur_len += buf_len;
+
+			if (cur_len > *len) {
+				return -ENOMEM;
+			}
+
 			memcpy(cur_data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
 
-			cur_len += buf_len;
 			cur_data = data + cur_len;
 			buf_len = 0;
 
@@ -215,9 +219,14 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 		/* remove Header of last packet */
 		buf_len -= OPTIGA_NETTRAN_PACKET_OFFSET;
+		cur_len += buf_len;
+
+		if (cur_len > *len) {
+			return -ENOMEM;
+		}
+
 		memcpy(cur_data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
 
-		cur_len += buf_len;
 		*len = cur_len;
 
 		return 0;
