@@ -73,19 +73,29 @@ enum CMDS_TRUSTX_ALGORITHM {
 	CMDS_TRUSTX_ALGORITHM_SHA256	= 0xE2
 };
 
+enum CMDS_TRUSTX_KEY_USAGE_FLAG {
+	CMDS_TRUSTX_KEY_USAGE_FLAG_AUTH	= 0x01,
+	CMDS_TRUSTX_KEY_USAGE_FLAG_ENC = 0x02,
+	CMDS_TRUSTX_KEY_USAGE_FLAG_HOST_FW_UPDATE = 0x04,
+	CMDS_TRUSTX_KEY_USAGE_FLAG_DEV_MGMT = 0x08,
+	CMDS_TRUSTX_KEY_USAGE_FLAG_SIGN = 0x10,
+};
+
 /*
  * @brief Generate an ECDSA key pair and export the public key
  *
  * @param ctx Command context to use
  * @param oid Object ID to store the private key
  * @param alg Type of key pair to generate
+ * @param key_usage Combination of CMDS_TRUSTX_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
  * @param pub_key Output buffer for the pulic key
  * @param pub_key_len length of pub_key, contains the length of the public key
  * @return 0 on success, error code otherwise
  *
  * @note The size of the public key buffer must match the selected algorithm or be bigger.
  */
-int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg, u8_t *pub_key, size_t *pub_key_len);
+int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg,
+				enum CMDS_TRUSTX_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
 
 #define CMDS_TRUSTX_NIST_P256_SIGNATURE_LEN 64
 #define CMDS_TRUSTX_NIST_P384_SIGNATURE_LEN 96

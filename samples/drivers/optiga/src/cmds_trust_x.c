@@ -46,10 +46,10 @@ static size_t set_tlv(u8_t *buf, u8_t tag, const u8_t *val, size_t val_len)
 }
 
 #define SET_TLV_U8_LEN 4
-static size_t set_tlv_u8(u8_t *buf, u8_t tag, u16_t length, u8_t val)
+static size_t set_tlv_u8(u8_t *buf, u8_t tag, u8_t val)
 {
 	buf[0] = tag;
-	sys_put_be16(length, &buf[1]);
+	sys_put_be16(1, &buf[1]);
 	buf[3] = val;
 	return SET_TLV_U8_LEN;
 }
@@ -71,7 +71,7 @@ static size_t cmds_set_apdu_header(u8_t *apdu_start, enum OPTIGA_TRUSTX_CMD cmd,
 	return OPTIGA_TRUSTX_IN_DATA_OFFSET;
 }
 
-static void cmds_get_apdu_header(u8_t *apdu_start, u8_t *sta, u16_t *out_len)
+static size_t cmds_get_apdu_header(u8_t *apdu_start, u8_t *sta, u16_t *out_len)
 {
 	if (sta) {
 		*sta = apdu_start[OPTIGA_TRUSTX_STA_OFFSET];
@@ -80,6 +80,8 @@ static void cmds_get_apdu_header(u8_t *apdu_start, u8_t *sta, u16_t *out_len)
 	if (out_len) {
 		*out_len = sys_get_be16(&apdu_start[OPTIGA_TRUSTX_OUT_LEN_OFFSET]);
 	}
+
+	return OPTIGA_TRUSTX_IN_DATA_OFFSET;
 }
 
 
@@ -158,7 +160,7 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 
 	u8_t sta = 0;
 	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
 
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
@@ -173,7 +175,7 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 		return -ENOMEM;
 	}
 
-	memcpy(buf, &rx_buf[OPTIGA_TRUSTX_OUT_DATA_OFFSET], out_len);
+	memcpy(buf, rx_buf, out_len);
 	*len = out_len;
 	return 0;
 }
@@ -267,14 +269,19 @@ int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest,
 
 	u8_t sta = 0;
 	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
 
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 
+	/* Ensure length of APDU and length of buffer match */
+	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTX_OUT_DATA_OFFSET)) {
+		LOG_ERR("Incomplete APDU");
+		return -EIO;
+	}
 
 	/* decode to raw RS values */
-	bool success = asn1_to_ecdsa_rs(&rx_buf[OPTIGA_TRUSTX_OUT_DATA_OFFSET], out_len, signature, signature_len);
+	bool success = asn1_to_ecdsa_rs(rx_buf, out_len, signature, signature_len);
 	if(!success) {
 		LOG_ERR("Failed to decode signature");
 		return -EIO;
@@ -362,7 +369,8 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 	return 0;
 }
 
-int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg,  u8_t *pub_key, size_t *pub_key_len)
+int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg,
+				enum CMDS_TRUSTX_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= 11, "APDU buffer too small");
@@ -395,7 +403,7 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 	tx_buf += set_tlv_u16(tx_buf, 0x01, oid);
 
 	/* Key usage identifier */
-	tx_buf += set_tlv_u8(tx_buf, 0x02, 1, 0x10); // TODO: export parameter for key usage flags
+	tx_buf += set_tlv_u8(tx_buf, 0x02, key_usage);
 
 	/*
 	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
@@ -422,12 +430,17 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 
 	u8_t sta = 0;
 	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
 
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 
-	rx_buf += OPTIGA_TRUSTX_OUT_DATA_OFFSET;
+	/* Ensure length of APDU and length of buffer match */
+	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTX_OUT_DATA_OFFSET)) {
+		LOG_ERR("Incomplete APDU");
+		return -EIO;
+	}
+
 	__ASSERT(rx_buf[0] == 0x02, "Received Key not a pub key");
 
 	// TODO(chr): decide if we can skip ASN.1 decoding

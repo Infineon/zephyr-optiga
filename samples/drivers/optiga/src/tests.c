@@ -196,7 +196,7 @@ test_ret_t set_data_object_small(void)
 	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (res != 0) {
 		LOG_INF("Failed to read set DO APDU response");
-		return;
+		return FAIL;
 	}
 
 	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Set DO response:");
