@@ -88,7 +88,7 @@ u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
  */
 bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
 {
-	__ASSERT(len < OPTIGA_DATA_FCS_LEN, "Not enough bytes");
+	__ASSERT(len > OPTIGA_DATA_FCS_LEN, "Not enough bytes");
 
 	u16_t calc_fcs = optiga_data_frame_calc_fcs(frame_start, len - 2);
 	u16_t recv_fcs = sys_get_be16(&frame_start[len - 2]);
