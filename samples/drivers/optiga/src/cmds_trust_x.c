@@ -15,17 +15,21 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(cmds_x);
 
-#define OPTIGA_TRUSTX_CMD_GET_DATA_OBJECT	0x81
-#define OPTIGA_TRUSTX_CMD_SET_DATA_OBJECT	0x82
-#define OPTIGA_TRUSTX_CMD_CALC_SIGN		0xB1
-#define OPTIGA_TRUSTX_CMD_VERIFY_SIGN		0xB2
-#define OPTIGA_TRUSTX_CMD_GEN_KEYPAIR		0xB8
+enum OPTIGA_TRUSTX_CMD {
+	OPTIGA_TRUSTX_CMD_GET_DATA_OBJECT =	0x81,
+	OPTIGA_TRUSTX_CMD_SET_DATA_OBJECT =	0x82,
+	OPTIGA_TRUSTX_CMD_CALC_SIGN =		0xB1,
+	OPTIGA_TRUSTX_CMD_VERIFY_SIGN =		0xB2,
+	OPTIGA_TRUSTX_CMD_GEN_KEYPAIR =		0xB8,
+};
 
 /* Transmitted APDU fields */
 #define OPTIGA_TRUSTX_CMD_OFFSET 0
 #define OPTIGA_TRUSTX_PARAM_OFFSET 1
 #define OPTIGA_TRUSTX_IN_LEN_OFFSET 2
 #define OPTIGA_TRUSTX_IN_DATA_OFFSET 4
+
+#define OPTIGA_TRUSTX_IN_LEN_MAX 0xFFFF
 
 /* Response APDU fields */
 #define OPTIGA_TRUSTX_STA_OFFSET 0
@@ -59,6 +63,26 @@ static size_t set_tlv_u16(u8_t *buf, u8_t tag, u16_t val)
 	return SET_TLV_U16_LEN;
 }
 
+static size_t cmds_set_apdu_header(u8_t *apdu_start, enum OPTIGA_TRUSTX_CMD cmd, u8_t param, u16_t in_len)
+{
+	apdu_start[OPTIGA_TRUSTX_CMD_OFFSET] = cmd;
+	apdu_start[OPTIGA_TRUSTX_PARAM_OFFSET] = param;
+	sys_put_be16(in_len, &apdu_start[OPTIGA_TRUSTX_IN_LEN_OFFSET]);
+	return OPTIGA_TRUSTX_IN_DATA_OFFSET;
+}
+
+static void cmds_get_apdu_header(u8_t *apdu_start, u8_t *sta, u16_t *out_len)
+{
+	if (sta) {
+		*sta = apdu_start[OPTIGA_TRUSTX_STA_OFFSET];
+	}
+
+	if (out_len) {
+		*out_len = sys_get_be16(&apdu_start[OPTIGA_TRUSTX_OUT_LEN_OFFSET]);
+	}
+}
+
+
 int cmds_trust_x_init(struct cmds_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
 {
 	ctx->dev = dev;
@@ -72,25 +96,7 @@ void cmds_trust_x_free(struct cmds_ctx *ctx)
 {
 }
 
-static void cmds_set_apdu_header(u8_t *buf, u8_t cmd, u8_t param, u16_t in_len)
-{
-	buf[OPTIGA_TRUSTX_CMD_OFFSET] = cmd;
-	buf[OPTIGA_TRUSTX_PARAM_OFFSET] = param;
-	sys_put_be16(in_len, &buf[OPTIGA_TRUSTX_IN_LEN_OFFSET]);
-}
-
-static void cmds_get_apdu_header(u8_t *buf, u8_t *sta, u16_t *out_len)
-{
-	if (sta) {
-		*sta = buf[OPTIGA_TRUSTX_STA_OFFSET];
-	}
-
-	if (out_len) {
-		*out_len = sys_get_be16(&buf[OPTIGA_TRUSTX_OUT_LEN_OFFSET]);
-	}
-}
-
-int cmds_submit_apdu(struct cmds_ctx *ctx)
+static int cmds_submit_apdu(struct cmds_ctx *ctx)
 {
 	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
 
@@ -110,12 +116,10 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_DATA_CMD_LEN, "APDU buffer too small");
 
-	cmds_set_apdu_header(tx_buf,
+	tx_buf += cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_GET_DATA_OBJECT,
 				0x00, /* Read data */
 				0x06 /* Command len, see datasheet Table 8 */);
-
-	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -159,11 +163,16 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 
+	/* Ensure length of APDU and length of buffer match */
+	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTX_OUT_DATA_OFFSET)) {
+		LOG_ERR("Incomplete APDU");
+		return -EIO;
+	}
+
 	if(out_len > *len) {
 		return -ENOMEM;
 	}
 
-	// TODO(chr): out of bounds read check
 	memcpy(buf, &rx_buf[OPTIGA_TRUSTX_OUT_DATA_OFFSET], out_len);
 	*len = out_len;
 	return 0;
@@ -175,14 +184,16 @@ int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, c
 
 	__ASSERT(ctx->apdu_buf_len >= (len + 8), "APDU buffer too small");
 
-	cmds_set_apdu_header(tx_buf,
+	if(len + 4 > OPTIGA_TRUSTX_IN_LEN_MAX) {
+		LOG_ERR("Overflow in APDU header");
+		return -EINVAL;
+	}
+
+	tx_buf += cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_SET_DATA_OBJECT,
 				0x40, /* Erase and Write Data */
 				len + 4 /* Length of the Tx APDU */
-					// TODO(chr): prevent overflow
 			);
-
-	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -217,15 +228,16 @@ int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest,
 	u8_t *tx_buf = ctx->apdu_buf;
 
 	__ASSERT(ctx->apdu_buf_len >= (digest_len + 12), "APDU buffer too small");
+	if(digest_len + 8 > 0xFFFF) {
+		LOG_ERR("Overflow in APDU header");
+		return -EINVAL;
+	}
 
-	cmds_set_apdu_header(tx_buf,
+	tx_buf += cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_CALC_SIGN,
 				0x11, /* ECDSA FIPS 186-3 w/o hash */
 				digest_len + 8 /* Length of the Tx APDU */
-					// TODO(chr): prevent overflow
 			);
-
-	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
 	/* Digest to be signed */
 	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
@@ -265,8 +277,7 @@ int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest,
 	bool success = asn1_to_ecdsa_rs(&rx_buf[OPTIGA_TRUSTX_OUT_DATA_OFFSET], out_len, signature, signature_len);
 	if(!success) {
 		LOG_ERR("Failed to decode signature");
-		// TODO(chr): find proper return value
-		return -1;
+		return -EIO;
 	}
 
 	return 0;
@@ -294,12 +305,18 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 	/* Signature */
 	__ASSERT((signature_len % 2) == 0, "Signature must have even number of bytes");
 	size_t asn1_sig_len = ctx->apdu_buf_len - (ctx->apdu_buf - tx_buf);
+
 	bool success = ecdsa_rs_to_asn1_integers(signature, signature + signature_len/2, signature_len/2, tx_buf, &asn1_sig_len);
 	if(!success) {
 		LOG_ERR("Couldn't encode signature");
 		return -EINVAL;
 	}
 	tx_buf += asn1_sig_len;
+
+	if(digest_len + 11 + asn1_sig_len > OPTIGA_TRUSTX_IN_LEN_MAX) {
+		LOG_ERR("Overflow in APDU header");
+		return -EINVAL;
+	}
 
 	/* length of signature is known now */
 	sys_put_be16(asn1_sig_len, sig_len_field);
@@ -309,7 +326,6 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 				OPTIGA_TRUSTX_CMD_VERIFY_SIGN,
 				0x11, /* ECDSA FIPS 186-3 w/o hash */
 				digest_len + 11 + asn1_sig_len /* Length of the Tx APDU */
-					// TODO(chr): prevent overflow
 			);
 
 	/* OID of Public Key Certificate */
@@ -352,7 +368,6 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 	__ASSERT(ctx->apdu_buf_len >= 11, "APDU buffer too small");
 	__ASSERT(pub_key_len != NULL, "Invalid NULL pointer");
 
-
 	switch(alg) {
 		case CMDS_TRUSTX_ALGORITHM_NIST_P256:
 			if(*pub_key_len < CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN) {
@@ -371,12 +386,10 @@ int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX
 	}
 
 
-	cmds_set_apdu_header(tx_buf,
+	tx_buf += cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_GEN_KEYPAIR,
 				alg, /* Key algorithm */
 				0x09 /* Command len, see datasheet Table 19 */);
-
-	tx_buf += OPTIGA_TRUSTX_IN_DATA_OFFSET;
 
 	/* OID */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, oid);
