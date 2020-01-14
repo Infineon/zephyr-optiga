@@ -23,6 +23,13 @@ enum OPTIGA_TRUSTX_CMD {
 	OPTIGA_TRUSTX_CMD_GEN_KEYPAIR =		0xB8,
 };
 
+/* Parameters for SetDataObject command, see Table 9 */
+enum OPTIGA_TRUSTX_SET_DATA_OBJECT {
+	OPTIGA_TRUSTX_SET_DATA_OBJECT_WRITE_DATA = 0x00,
+	OPTIGA_TRUSTX_SET_DATA_OBJECT_WRITE_METADATA = 0x01,
+	OPTIGA_TRUSTX_SET_DATA_OBJECT_ERASE_WRITE_DATA = 0x40,
+};
+
 /* Transmitted APDU fields */
 #define OPTIGA_TRUSTX_CMD_OFFSET 0
 #define OPTIGA_TRUSTX_PARAM_OFFSET 1
@@ -180,7 +187,7 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 	return 0;
 }
 
-int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, const u8_t *buf, size_t len)
+int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -191,9 +198,12 @@ int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, c
 		return -EINVAL;
 	}
 
+	const u8_t param = erase ? OPTIGA_TRUSTX_SET_DATA_OBJECT_ERASE_WRITE_DATA
+		: OPTIGA_TRUSTX_SET_DATA_OBJECT_WRITE_DATA;
+
 	tx_buf += cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_SET_DATA_OBJECT,
-				0x40, /* Erase and Write Data */
+				param, /* Param */
 				len + 4 /* Length of the Tx APDU */
 			);
 

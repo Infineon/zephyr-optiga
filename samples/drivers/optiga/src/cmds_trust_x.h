@@ -56,12 +56,13 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
  *
  * @param ctx Command context to use
  * @param oid Object ID to write to
+ * @param erase If true, erase data object before writing
  * @param offs Number of bytes to skip from the beginning of the data object
  * @param buf Data to write
  * @param len length of buf
  * @return 0 on success, error code otherwise
  */
-int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, const u8_t *buf, size_t len);
+int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
 
 
 #define CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN 64

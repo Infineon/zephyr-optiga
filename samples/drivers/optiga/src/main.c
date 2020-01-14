@@ -59,7 +59,7 @@ void main(void)
 	k_sleep(100);
 
 	/* Write the stripped device certificate to another data object */
-	res = cmds_trust_x_set_data_object(&ctx, 0xE0E1, 0, cert_buf + 9, cert_len - 9);
+	res = cmds_trust_x_set_data_object(&ctx, 0xE0E1, true, 0, cert_buf + 9, cert_len - 9);
 	LOG_INF("cmds_trust_x_set_data_object res: %d", res);
 	k_sleep(100);
 
