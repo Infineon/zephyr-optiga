@@ -288,19 +288,19 @@ static const struct optiga_api optiga_api_funcs = {
 #define OPTIGA_DEVICE(id)						\
 static K_THREAD_STACK_DEFINE(optiga_##id##_stack, OPTIGA_STACK_SIZE);	\
 	static const struct optiga_cfg optiga_##id##_cfg = {		\
-		.i2c_dev_name = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_BUS_NAME,	\
-		.i2c_addr     = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_BASE_ADDRESS,	\
+		.i2c_dev_name = DT_INST_##id##_INFINEON_OPTIGA_TRUST_X_BUS_NAME,	\
+		.i2c_addr     = DT_INST_##id##_INFINEON_OPTIGA_TRUST_X_BASE_ADDRESS,	\
 	};								\
 									\
 static struct optiga_data optiga_##id##_data = {			\
 		.worker_stack = optiga_##id##_stack			\
 	};								\
 									\
-DEVICE_AND_API_INIT(optiga_##id, DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_LABEL,	\
+DEVICE_AND_API_INIT(optiga_##id, DT_INST_##id##_INFINEON_OPTIGA_TRUST_X_LABEL,	\
 		    &optiga_init, &optiga_##id##_data,		\
 		    &optiga_##id##_cfg, POST_KERNEL,			\
 		    CONFIG_CRYPTO_INIT_PRIORITY, &optiga_api_funcs)
 
-#ifdef DT_INST_0_INFINEON_OPTIGA_TRUST_M
+#ifdef DT_INST_0_INFINEON_OPTIGA_TRUST_X
 OPTIGA_DEVICE(0);
-#endif /* DT_INST_0_INFINEON_OPTIGA_TRUST_M */
+#endif /* DT_INST_0_INFINEON_OPTIGA_TRUST_X */

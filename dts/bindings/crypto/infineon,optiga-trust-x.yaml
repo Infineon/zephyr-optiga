@@ -1,0 +1,16 @@
+# Copyright (c) 2019 - 2020, Infineon Technologies AG
+# SPDX-License-Identifier: Apache-2.0
+
+title: OPTIGA Trust X security controller
+
+description: >
+    This is a representation of the OPTIGA Trust X security controller
+
+compatible: "infineon,optiga-trust-x"
+
+include: i2c-device.yaml
+
+#properties:
+#    reset-gpios:
+#      type: phandle-array
+#      required: true

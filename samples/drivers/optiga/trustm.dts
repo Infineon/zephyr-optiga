@@ -1,8 +1,0 @@
-&arduino_i2c {
-    trustm@30 {
-        status = "okay";
-        compatible = "infineon,optiga-trust-m";
-        reg = <0x30>;
-        label = "trust-m";
-    };
-};

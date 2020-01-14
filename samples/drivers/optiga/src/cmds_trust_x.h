@@ -14,7 +14,7 @@
 #include <drivers/crypto/optiga.h>
 
 // TODO(chr): find the maximum APDU size value
-#define CMDS_MAX_APDU_SIZE 1600
+#define CMDS_TRUST_X_MAX_APDU_SIZE 1600
 
 struct cmds_ctx {
 	struct device *dev;

@@ -2,10 +2,10 @@
 
 cmake_minimum_required(VERSION 3.13.1)
 
-set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/trustm.dts")
+set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/trustx.dts")
 include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
 
-project(optiga_trust_m)
+project(optiga_trust_x)
 
 FILE(GLOB app_sources src/*.c)
 target_sources(app PRIVATE ${app_sources})
