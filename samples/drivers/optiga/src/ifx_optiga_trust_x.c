@@ -8,7 +8,7 @@
 #include <drivers/crypto/optiga.h>
 #include <sys/byteorder.h>
 
-#include "cmds_trust_x.h"
+#include "ifx_optiga_trust_x.h"
 #include "ecdsa_utils.h"
 
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
@@ -92,7 +92,7 @@ static size_t cmds_get_apdu_header(u8_t *apdu_start, u8_t *sta, u16_t *out_len)
 }
 
 
-int cmds_trust_x_init(struct cmds_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
+int ifx_optiga_trust_init(struct ifx_optiga_trust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
 {
 	ctx->dev = dev;
 	ctx->apdu_buf = apdu_buf;
@@ -101,11 +101,11 @@ int cmds_trust_x_init(struct cmds_ctx *ctx, struct device *dev, u8_t *apdu_buf, 
 	return 0;
 }
 
-void cmds_trust_x_free(struct cmds_ctx *ctx)
+void ifx_optiga_trust_free(struct ifx_optiga_trust_ctx *ctx)
 {
 }
 
-static int cmds_submit_apdu(struct cmds_ctx *ctx)
+static int cmds_submit_apdu(struct ifx_optiga_trust_ctx *ctx)
 {
 	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
 
@@ -120,7 +120,7 @@ static int cmds_submit_apdu(struct cmds_ctx *ctx)
 }
 
 #define OPTIGA_GET_DATA_CMD_LEN 10
-int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
+int ifx_optiga_trust_get_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_DATA_CMD_LEN, "APDU buffer too small");
@@ -187,7 +187,7 @@ int cmds_trust_x_get_data_object(struct cmds_ctx *ctx, u16_t oid, size_t offs, u
 	return 0;
 }
 
-int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
+int ifx_optiga_trust_set_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -235,7 +235,7 @@ int cmds_trust_x_set_data_object(struct cmds_ctx *ctx, u16_t oid, bool erase, si
 	return 0;
 }
 
-int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
+int ifx_optiga_trust_sign_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -300,7 +300,7 @@ int cmds_trust_x_sign_ecdsa(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest,
 	return 0;
 }
 
-int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
+int ifx_optiga_trust_verify_ecdsa_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -379,25 +379,25 @@ int cmds_trust_x_verify_ecdsa_oid(struct cmds_ctx *ctx, u16_t oid, const u8_t *d
 	return 0;
 }
 
-int cmds_trust_x_gen_key_ecdsa(struct cmds_ctx *ctx, u16_t oid, enum CMDS_TRUSTX_ALGORITHM alg,
-				enum CMDS_TRUSTX_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+int ifx_optiga_trust_gen_key_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
+				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= 11, "APDU buffer too small");
 	__ASSERT(pub_key_len != NULL, "Invalid NULL pointer");
 
 	switch(alg) {
-		case CMDS_TRUSTX_ALGORITHM_NIST_P256:
-			if(*pub_key_len < CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN) {
+		case IFX_OPTIGA_TRUST_ALGORITHM_NIST_P256:
+			if(*pub_key_len < IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN) {
 				return -EINVAL;
 			}
-			*pub_key_len = CMDS_TRUSTX_NIST_P256_PUB_KEY_LEN;
+			*pub_key_len = IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN;
 			break;
-		case CMDS_TRUSTX_ALGORITHM_NIST_P384:
-			if(*pub_key_len < CMDS_TRUSTX_NIST_P384_PUB_KEY_LEN) {
+		case IFX_OPTIGA_TRUST_ALGORITHM_NIST_P384:
+			if(*pub_key_len < IFX_OPTIGA_TRUST_NIST_P384_PUB_KEY_LEN) {
 				return -EINVAL;
 			}
-			*pub_key_len = CMDS_TRUSTX_NIST_P384_PUB_KEY_LEN;
+			*pub_key_len = IFX_OPTIGA_TRUST_NIST_P384_PUB_KEY_LEN;
 			break;
 		default:
 			return -EINVAL;
