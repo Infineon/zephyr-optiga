@@ -49,7 +49,7 @@ void ifx_optiga_trust_free(struct ifx_optiga_trust_ctx *ctx);
  * @param len Must be set to the length of buf and returns the number of data bytes read
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_trust_get_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
+int ifx_optiga_data_get(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
 
 /*
  * @brief Write data to a data object in the OPTIGA
@@ -62,7 +62,7 @@ int ifx_optiga_trust_get_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid
  * @param len length of buf
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_trust_set_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
+int ifx_optiga_data_set(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
 
 
 #define IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN 64
@@ -89,13 +89,13 @@ enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG {
  * @param oid Object ID to store the private key
  * @param alg Type of key pair to generate
  * @param key_usage Combination of IFX_OPTIGA_TRUST_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
- * @param pub_key Output buffer for the pulic key
+ * @param pub_key Output buffer for the public key
  * @param pub_key_len length of pub_key, contains the length of the public key
  * @return 0 on success, error code otherwise
  *
  * @note The size of the public key buffer must match the selected algorithm or be bigger.
  */
-int ifx_optiga_trust_gen_key_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
+int ifx_optiga_ecc_key_pair_gen_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
 				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
 
 #define IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN 64
@@ -112,7 +112,7 @@ int ifx_optiga_trust_gen_key_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, 
  * @param signature_len Length of signature buffer, contains length of signature afterwards.
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_trust_sign_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
+int ifx_optiga_ecdsa_sign_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
 
 /*
  * @brief Verify a signature using a public key in the OPTIGA
@@ -125,6 +125,113 @@ int ifx_optiga_trust_sign_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, con
  * @param signature_len Length of signature
  * @return 0 if the signature matches, error code otherwise
  */
-int ifx_optiga_trust_verify_ecdsa_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
+int ifx_optiga_ecdsa_verify_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
+
+/* The following APIs are drafts for now */
+
+/*
+ * @brief Generate an ECDSA key pair and export private and public key
+ *
+ * @param ctx Command context to use
+ * @param alg Type of key pair to generate
+ * @param key_usage Combination of IFX_OPTIGA_TRUST_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
+ * @param priv_key Output buffer for the private key
+ * @param priv_key_len length of pub_key, contains the length of the private key
+ * @param pub_key Output buffer for the public key
+ * @param pub_key_len length of pub_key, contains the length of the public key
+ * @return 0 on success, error code otherwise
+ *
+ * @note The size of the public and private key buffers must match the selected algorithm or be bigger.
+ */
+int ifx_optiga_ecc_key_pair_gen(struct ifx_optiga_trust_ctx *ctx,
+				enum IFX_OPTIGA_TRUST_ALGORITHM alg,
+				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage,
+				u8_t* priv_key, size_t * priv_key_len,
+				u8_t *pub_key, size_t *pub_key_len);
+
+/*
+ * @brief Perform an ECDH operation on a shared secret to derive a key
+ *
+ * @param ctx Command context to use
+ * @param shared_secret_oid OID of the shared secret to use for key derivation
+ * @param deriv_data Shared secret derivation data
+ * @param deriv_data_len Length of deriv_data
+ * @param key Output buffer for the derived key
+ * @param key_len Length of key
+ * @return 0 on success, error code otherwise
+ */
+int ifx_optiga_ecdh_compute(struct ifx_optiga_trust_ctx *ctx, u16_t shared_secret_oid,
+				const u8_t *deriv_data, size_t deriv_data_len,
+				u8_t *key, size_t key_len);
+
+/*
+ * @brief Perform an ECDH operation on a shared secret to derive a key and store it in a session context
+ *
+ * @param ctx Command context to use
+ * @param shared_secret_oid OID of the shared secret to use for key derivation
+ * @param deriv_data Shared secret derivation data
+ * @param deriv_data_len Length of deriv_data
+ * @param key_len Length of key
+ * @param key_oid OID to store the derived key
+ * @return 0 on success, error code otherwise
+ */
+int ifx_optiga_ecdh_compute_oid(struct ifx_optiga_trust_ctx *ctx, u16_t shared_secret_oid,
+				const u8_t *deriv_data, size_t deriv_data_len,
+				size_t key_len, u16_t key_oid);
+
+/*
+ * @brief Verify a signature using a public key provided by the host
+ *
+ * @param ctx Command context to use
+ * @param alg Algorithm identifier of the public key
+ * @param pub_key Output buffer for the public key
+ * @param pub_key_len length of pub_key, contains the length of the public key
+ * @param digest Digest to verify the signature of
+ * @param digest_len Length of digest
+ * @param signature Signature to verify
+ * @param signature_len Length of signature
+ * @return 0 if the signature matches, error code otherwise
+ */
+int ifx_optiga_ecdsa_verify_host(struct ifx_optiga_trust_ctx *ctx, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
+				const u8_t *pub_key, size_t pub_key_len,
+				const u8_t *digest, size_t digest_len,
+				const u8_t *signature, size_t signature_len);
+
+int ifx_optiga_metadata_get(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_metadata_set(struct ifx_optiga_trust_ctx *ctx);
+
+#define IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN 32
+
+int ifx_optiga_hash_sha256(struct ifx_optiga_trust_ctx *ctx);
+
+/*
+ * @brief Hash data from an OID
+ *
+ * @param ctx Command context to use
+ * @param oid OID to read the data to has
+ * @param offs Number of bytes to skip befor hashing data
+ * @param len Number of bytes to hash
+ * @param digest Computed digest
+ * @param digest_len Length of digest, contains the length of the computed digest afterwards
+ * @return 0 if the signature matches, error code otherwise
+ */
+int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
+				u16_t oid, size_t offs, size_t len,
+				u8_t *digest, size_t *digest_len);
+
+int ifx_optiga_rng_generate(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_tls1_2_prf_sha256_compute(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_set_auth_scheme(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_get_auth_msg(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_set_auth_msg(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_proc_downlink_msg(struct ifx_optiga_trust_ctx *ctx);
+
+int ifx_optiga_proc_uplink_msg(struct ifx_optiga_trust_ctx *ctx);
 
 #endif /* IFX_OPTIGA_TRUST_X_H_ */

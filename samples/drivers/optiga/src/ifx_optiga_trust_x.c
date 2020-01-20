@@ -18,6 +18,7 @@ LOG_MODULE_REGISTER(cmds_x);
 enum OPTIGA_TRUSTX_CMD {
 	OPTIGA_TRUSTX_CMD_GET_DATA_OBJECT =	0x81,
 	OPTIGA_TRUSTX_CMD_SET_DATA_OBJECT =	0x82,
+	OPTIGA_TRUSTX_CMD_CALC_HASH =		0xB0,
 	OPTIGA_TRUSTX_CMD_CALC_SIGN =		0xB1,
 	OPTIGA_TRUSTX_CMD_VERIFY_SIGN =		0xB2,
 	OPTIGA_TRUSTX_CMD_GEN_KEYPAIR =		0xB8,
@@ -120,7 +121,7 @@ static int cmds_submit_apdu(struct ifx_optiga_trust_ctx *ctx)
 }
 
 #define OPTIGA_GET_DATA_CMD_LEN 10
-int ifx_optiga_trust_get_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
+int ifx_optiga_data_get(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_DATA_CMD_LEN, "APDU buffer too small");
@@ -187,7 +188,7 @@ int ifx_optiga_trust_get_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid
 	return 0;
 }
 
-int ifx_optiga_trust_set_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
+int ifx_optiga_data_set(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -235,7 +236,7 @@ int ifx_optiga_trust_set_data_object(struct ifx_optiga_trust_ctx *ctx, u16_t oid
 	return 0;
 }
 
-int ifx_optiga_trust_sign_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
+int ifx_optiga_ecdsa_sign_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -300,7 +301,7 @@ int ifx_optiga_trust_sign_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, con
 	return 0;
 }
 
-int ifx_optiga_trust_verify_ecdsa_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
+int ifx_optiga_ecdsa_verify_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -379,7 +380,7 @@ int ifx_optiga_trust_verify_ecdsa_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oi
 	return 0;
 }
 
-int ifx_optiga_trust_gen_key_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
+int ifx_optiga_ecc_key_pair_gen_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
 				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
@@ -459,6 +460,96 @@ int ifx_optiga_trust_gen_key_ecdsa(struct ifx_optiga_trust_ctx *ctx, u16_t oid, 
 	rx_buf += 3; // skip tag and length
 	rx_buf += 4; // skip ASN.1 tag, length and 2 value bytes
 	memcpy(pub_key, rx_buf, *pub_key_len);
+
+	return 0;
+}
+
+/* Tags for CalcHash command, see Table 16 */
+enum OPTIGA_TRUSTX_CALC_HASH_TAGS {
+	OPTIGA_TRUSTX_CALC_HASH_START = 0x00,
+	OPTIGA_TRUSTX_CALC_HASH_START_FINAL = 0x01,
+	OPTIGA_TRUSTX_CALC_HASH_CONTINUE = 0x02,
+	OPTIGA_TRUSTX_CALC_HASH_FINAL = 0x03,
+	OPTIGA_TRUSTX_CALC_HASH_TERMINATE = 0x04,
+	OPTIGA_TRUSTX_CALC_HASH_FINAL_KEEP = 0x05,
+	OPTIGA_TRUSTX_CALC_HASH_OID_START = 0x10,
+	OPTIGA_TRUSTX_CALC_HASH_OID_START_FINAL = 0x11,
+	OPTIGA_TRUSTX_CALC_HASH_OID_CONTINUE = 0x12,
+	OPTIGA_TRUSTX_CALC_HASH_OID_FINAL = 0x13,
+	OPTIGA_TRUSTX_CALC_HASH_OID_FINAL_KEEP = 0x15,
+};
+
+int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
+				u16_t oid, size_t offs, size_t len,
+				u8_t *digest, size_t *digest_len)
+{
+	u8_t *tx_buf = ctx->apdu_buf;
+
+	__ASSERT(ctx->apdu_buf_len >= (OPTIGA_TRUSTX_IN_DATA_OFFSET + 9), "APDU buffer too small");
+
+	tx_buf += cmds_set_apdu_header(tx_buf,
+				OPTIGA_TRUSTX_CMD_CALC_HASH,
+				IFX_OPTIGA_TRUST_ALGORITHM_SHA256, /* Param */
+				9 /* Length of the Tx APDU */
+			);
+
+	/* Tag */
+	*tx_buf = OPTIGA_TRUSTX_CALC_HASH_OID_START_FINAL;
+	tx_buf += 1;
+
+	/* Length */
+	sys_put_be16(0x06, tx_buf);
+	tx_buf += 2;
+
+	/* OID */
+	sys_put_be16(oid, tx_buf);
+	tx_buf += 2;
+
+	/* Offset */
+	sys_put_be16(offs, tx_buf);
+	tx_buf += 2;
+
+	/* Length */
+	sys_put_be16(len, tx_buf);
+	tx_buf += 2;
+
+	/* Setup APDU for cmd queue */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
+	ctx->apdu.rx_buf = tx_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+
+	int result_code = cmds_submit_apdu(ctx);
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("SetDataObject Error Code: %d", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+
+	u8_t sta = 0;
+	u16_t out_len = 0;
+	cmds_get_apdu_header(rx_buf, &sta, &out_len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+	__ASSERT(out_len == (IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
+
+	/* Skip Tag + Length */
+	rx_buf += 3;
+	out_len -= 3;
+
+	if (*digest_len < out_len) {
+		return -ENOMEM;
+	}
+
+	memcpy(digest, rx_buf, out_len);
 
 	return 0;
 }

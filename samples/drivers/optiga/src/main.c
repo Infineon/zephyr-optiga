@@ -50,24 +50,24 @@ void main(void)
 
 	/* read device certificate */
 	cert_len = CERT_BUFFER_LEN;
-	res = ifx_optiga_trust_get_data_object(&ctx, 0xE0E0, 0, cert_buf, &cert_len);
+	res = ifx_optiga_data_get(&ctx, 0xE0E0, 0, cert_buf, &cert_len);
 
-	LOG_INF("ifx_optiga_trust_get_data_object res: %d", res);
+	LOG_INF("ifx_optiga_data_get res: %d", res);
 	LOG_HEXDUMP_INF(cert_buf, cert_len, "Full Certificate:");
 
 
 	k_sleep(100);
 
 	/* Write the stripped device certificate to another data object */
-	res = ifx_optiga_trust_set_data_object(&ctx, 0xE0E1, true, 0, cert_buf + 9, cert_len - 9);
-	LOG_INF("ifx_optiga_trust_set_data_object res: %d", res);
+	res = ifx_optiga_data_set(&ctx, 0xE0E1, true, 0, cert_buf + 9, cert_len - 9);
+	LOG_INF("ifx_optiga_data_set res: %d", res);
 	k_sleep(100);
 
 	/* Read the stripped device certificate */
 	cert_len = CERT_BUFFER_LEN;
-	res = ifx_optiga_trust_get_data_object(&ctx, 0xE0E1, 0, cert_buf, &cert_len);
+	res = ifx_optiga_data_get(&ctx, 0xE0E1, 0, cert_buf, &cert_len);
 
-	LOG_INF("ifx_optiga_trust_get_data_object res: %d", res);
+	LOG_INF("ifx_optiga_data_get res: %d", res);
 	LOG_HEXDUMP_INF(cert_buf, cert_len, "Stripped Certificate:");
 
 	u8_t digest[DIGEST_LEN] = {0};
@@ -76,12 +76,12 @@ void main(void)
 	s64_t time_stamp = k_uptime_get();
 
 	/* Use the device key to create a signature */
-	res = ifx_optiga_trust_sign_ecdsa(&ctx, 0xE0F0, digest, DIGEST_LEN,
+	res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, digest, DIGEST_LEN,
 		signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
 
 	s32_t milliseconds_spent = k_uptime_delta(&time_stamp);
 
-	LOG_INF("ifx_optiga_trust_sign_ecdsa res: %d, took %d ms", res, milliseconds_spent);
+	LOG_INF("ifx_optiga_ecdsa_sign_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN, "Signature:");
 
 	k_sleep(100);
@@ -89,12 +89,12 @@ void main(void)
 	time_stamp = k_uptime_get();
 
 	/* Verify the signature using the stripped certificate */
-	res = ifx_optiga_trust_verify_ecdsa_oid(&ctx, 0xE0E1, digest, DIGEST_LEN,
+	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, digest, DIGEST_LEN,
 		signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
 
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 
-	LOG_INF("ifx_optiga_trust_verify_ecdsa_oid res: %d, took %d ms", res, milliseconds_spent);
+	LOG_INF("ifx_optiga_ecdsa_verify_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_INF("VERIFY: %s", res == 0 ? "PASS" : "FAIL");
 
 	u8_t pub_key[IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN] = {0};
@@ -102,13 +102,26 @@ void main(void)
 
 	time_stamp = k_uptime_get();
 
-	/* Generate an ECDSA keypair and export the public key */
-	res = ifx_optiga_trust_gen_key_ecdsa(&ctx, 0xE100, IFX_OPTIGA_TRUST_ALGORITHM_NIST_P256,
+	/* Generate an ECC keypair and export the public key */
+	res = ifx_optiga_ecc_key_pair_gen_oid(&ctx, 0xE100, IFX_OPTIGA_TRUST_ALGORITHM_NIST_P256,
 		IFX_OPTIGA_TRUST_KEY_USAGE_FLAG_SIGN, pub_key, &pub_key_len);
 
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 	LOG_INF("ifx_optiga_trust_gen_key_ecdsa res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(pub_key, IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN, "Public key:");
+
+	u8_t hash_buf[IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN] = {0};
+	size_t hash_buf_len = IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN;
+
+	time_stamp = k_uptime_get();
+
+	/* Hash some data */
+	res = ifx_optiga_hash_sha256_oid(&ctx,  0xE0E1, 0, 32, hash_buf, &hash_buf_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("ifx_optiga_hash_sha256_oid res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(hash_buf, IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN, "Hash:");
+
 
 	while(true) {
 		k_sleep(1000);
