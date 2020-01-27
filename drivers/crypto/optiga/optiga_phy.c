@@ -40,7 +40,8 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_STATUS_POLL_TRIES 20
 #define OPTIGA_STATUS_POLL_TIME_MS 10
 
-int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
+/* Helper function for late acknowledge write transfers */
+int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
 	const struct optiga_cfg *config = dev->config->config_info;
@@ -48,9 +49,11 @@ int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 	bool acked = false;
 	int res = 0;
 	int i = 0;
+	/* Try writing until maximum number of tries is reached */
 	for(i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
 		res = i2c_write(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
+			/* Write transfer successful */
 			acked = true;
 			break;
 		}
@@ -58,6 +61,7 @@ int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 	}
 
 	if (!acked) {
+		/* Error during write transfer */
 		LOG_ERR("No ACK received");
 		return -EIO;
 	}
@@ -66,6 +70,14 @@ int optiga_delayed_ack_write(struct device *dev, const u8_t *data, size_t len)
 	return 0;
 }
 
+/**
+ * @brief Reads from a register of the given device
+ * @param dev Device to work with
+ * @param addr Register address to read
+ * @param data Output buffer for the read data
+ * @param len Number of bytes to read from the register
+ * @note data must be at least len bytes
+ */
 int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 {
 	__ASSERT(len > 0, "Can't read 0 bytes");
@@ -74,7 +86,7 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	const struct optiga_cfg *config = dev->config->config_info;
 
 	/* select register for read */
-	int res = optiga_delayed_ack_write(dev, &addr, sizeof(addr));
+	int res = optiga_late_ack_write(dev, &addr, sizeof(addr));
 	if (res != 0) {
 		return res;
 	}
@@ -104,6 +116,13 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	return res;
 }
 
+/**
+ * @brief Writes to a register of the given device
+ * @param dev Device to work with
+ * @param addr Register address to write
+ * @param len Number of bytes to write to the register
+ * @note The data to write is taken from the host buffer to avoid copies.
+ */
 int optiga_reg_write(struct device *dev, u8_t addr, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
@@ -115,7 +134,7 @@ int optiga_reg_write(struct device *dev, u8_t addr, size_t len)
 
 	driver->phy.host_buf[0] = addr;
 
-	return optiga_delayed_ack_write(dev, driver->phy.host_buf, len + 1);
+	return optiga_late_ack_write(dev, driver->phy.host_buf, len + 1);
 }
 
 /*
