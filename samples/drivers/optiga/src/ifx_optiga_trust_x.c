@@ -535,7 +535,7 @@ int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
 
 	u8_t sta = 0;
 	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
 
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
