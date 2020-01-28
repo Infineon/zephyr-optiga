@@ -302,6 +302,12 @@ int optiga_phy_init(struct device *dev) {
 	return 0;
 }
 
+/**
+ * @brief Get the buffer to write frames
+ * @param dev Device to access
+ * @param len If not NULL, return the length of the buffer
+ * @return Pointer to the buffer for frame data
+ */
 inline u8_t *optiga_phy_frame_buf(struct device *dev, size_t *len)
 {
 	struct optiga_data *driver = dev->driver_data;

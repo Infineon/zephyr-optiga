@@ -164,6 +164,13 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start) {
 	return frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_ACKNR_MASK;
 }
 
+/*
+ * @brief Send a sync frame to the device
+ * @param dev The device to send the sync frame to
+ * @return 0 on success, error code otherwise
+ *
+ * A sync frame resets the sequence counters on host and device
+ */
 int optiga_send_sync_frame(struct device *dev)
 {
 	size_t buf_len = 0;
