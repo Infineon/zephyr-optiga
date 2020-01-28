@@ -92,34 +92,47 @@ extern struct device *dev;
 
 test_ret_t phy_test(void)
 {
-	u8_t data_reg_len_reg[2] = {0};
-	int res = optiga_reg_read(dev, 0x81, data_reg_len_reg, 2);
+#define DATA_REG_LEN_SIZE 2
+	static const u8_t data_reg_len_test_val[DATA_REG_LEN_SIZE] = {0x00, 0x40};
+	u8_t data_reg_len_reg[DATA_REG_LEN_SIZE] = {0};
+	int res = optiga_reg_read(dev, 0x81, data_reg_len_reg, DATA_REG_LEN_SIZE);
 	if (res != 0) {
 		LOG_INF("Failed to read data reg len register");
 		return FAIL;
 	}
 
-	LOG_HEXDUMP_INF(data_reg_len_reg, 2, "Read data reg len:");
+	LOG_HEXDUMP_INF(data_reg_len_reg, DATA_REG_LEN_SIZE, "Read data reg len:");
 
-	// set to 0x0040
-	data_reg_len_reg[0] = 0;
-	data_reg_len_reg[1] = 0x40;
+	size_t frame_buf_len = 0;
+	u8_t *frame_buf = optiga_phy_frame_buf(dev, &frame_buf_len);
 
-	res = optiga_reg_write(dev, 0x81, data_reg_len_reg, 2);
+	if (frame_buf_len < DATA_REG_LEN_SIZE) {
+		return FAIL;
+	}
+
+	memcpy(frame_buf, data_reg_len_test_val, DATA_REG_LEN_SIZE);
+
+	res = optiga_reg_write(dev, 0x81, DATA_REG_LEN_SIZE);
 	if (res != 0) {
 		LOG_INF("Failed to write data reg len register");
 		return FAIL;
 	}
 
-	memset(data_reg_len_reg, 0, 2);
+	memset(data_reg_len_reg, 0, DATA_REG_LEN_SIZE);
 
-	res = optiga_reg_read(dev, 0x81, data_reg_len_reg, 2);
+	res = optiga_reg_read(dev, 0x81, data_reg_len_reg, DATA_REG_LEN_SIZE);
 	if (res != 0) {
 		LOG_INF("Failed to read data reg len register");
 		return FAIL;
 	}
 
-	LOG_HEXDUMP_INF(data_reg_len_reg, 2, "Read data reg len:");
+	LOG_HEXDUMP_INF(data_reg_len_reg, DATA_REG_LEN_SIZE, "Read data reg len:");
+
+	/* Should be the written value */
+	if(!equals(data_reg_len_test_val, DATA_REG_LEN_SIZE,
+		data_reg_len_reg, DATA_REG_LEN_SIZE)) {
+		return FAIL;
+	}
 
 	/* reset and check data_reg_len if it worked */
 	res =  optiga_soft_reset(dev);
@@ -128,17 +141,24 @@ test_ret_t phy_test(void)
 		return FAIL;
 	}
 
-	memset(data_reg_len_reg, 0, 2);
+	memset(data_reg_len_reg, 0, DATA_REG_LEN_SIZE);
 
-	res = optiga_reg_read(dev, 0x81, data_reg_len_reg, 2);
+	res = optiga_reg_read(dev, 0x81, data_reg_len_reg, DATA_REG_LEN_SIZE);
 	if (res != 0) {
 		LOG_INF("Failed to read data reg len register");
 		return FAIL;
 	}
 
-	LOG_HEXDUMP_INF(data_reg_len_reg, 2, "Read data reg len:");
+	/* Should now be the initial value again */
+	if(equals(data_reg_len_test_val, DATA_REG_LEN_SIZE,
+		data_reg_len_reg, DATA_REG_LEN_SIZE)) {
+		return FAIL;
+	}
+
+	LOG_HEXDUMP_INF(data_reg_len_reg, DATA_REG_LEN_SIZE, "Read data reg len:");
 
 	return PASS;
+#undef DATA_REG_LEN_SIZE
 }
 
 #define TMP_BUF_SIZE 1024
@@ -322,9 +342,12 @@ test_ret_t get_data_object_queued(void)
 void run_tests()
 {
 	int failed_cnt = 0;
+
+	/* Tests without Trust X/M lib */
 	failed_cnt += run_timed(test_fcs, "FCS Test");
-	// TODO(chr): rewrite this test
-	//failed_cnt += run_timed(phy_test, "PHY Test");
+	failed_cnt += run_timed(phy_test, "PHY Test");
+	/* Need to reset all protocol layers because PHY Test can mess them up */
+	optiga_reset(dev);
 
 	failed_cnt += run_timed(set_data_object_small, "APDU Set DO small");
 	failed_cnt += run_timed(get_data_object_small, "APDU Get DO small");

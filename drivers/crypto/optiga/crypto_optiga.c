@@ -127,7 +127,7 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	return 0;
 }
 
-static int optiga_reset(struct device *dev)
+int optiga_reset(struct device *dev)
 {
 	int err = optiga_phy_init(dev);
 	if(err != 0) {
