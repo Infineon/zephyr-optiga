@@ -23,7 +23,7 @@ size_t cert_len = CERT_BUFFER_LEN;
 #define DIGEST_LEN 32
 
 // set to '1' to run additional tests
-#define RUN_TESTS 0
+#define RUN_TESTS 1
 
 void main(void)
 {
@@ -39,6 +39,7 @@ void main(void)
 
 #if RUN_TESTS == 1
 	run_tests();
+	return;
 #endif
 
 	struct ifx_optiga_trust_ctx ctx;

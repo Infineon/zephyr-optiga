@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(test);
 #include "helpers.h"
 
 #include <drivers/crypto/optiga.h>
+#include "ifx_optiga_trust_x.h"
 
 
 /** return types of a testcase */
@@ -90,6 +91,11 @@ test_ret_t test_fcs(void)
 
 extern struct device *dev;
 
+/* APDU buffer for the command library */
+static u8_t apdu_buf[IFX_OPTIGA_TRUST_MAX_APDU_SIZE] = {0};
+/* Command library context */
+struct ifx_optiga_trust_ctx ctx;
+
 test_ret_t phy_test(void)
 {
 #define DATA_REG_LEN_SIZE 2
@@ -100,8 +106,6 @@ test_ret_t phy_test(void)
 		LOG_INF("Failed to read data reg len register");
 		return FAIL;
 	}
-
-	LOG_HEXDUMP_INF(data_reg_len_reg, DATA_REG_LEN_SIZE, "Read data reg len:");
 
 	size_t frame_buf_len = 0;
 	u8_t *frame_buf = optiga_phy_frame_buf(dev, &frame_buf_len);
@@ -125,8 +129,6 @@ test_ret_t phy_test(void)
 		LOG_INF("Failed to read data reg len register");
 		return FAIL;
 	}
-
-	LOG_HEXDUMP_INF(data_reg_len_reg, DATA_REG_LEN_SIZE, "Read data reg len:");
 
 	/* Should be the written value */
 	if(!equals(data_reg_len_test_val, DATA_REG_LEN_SIZE,
@@ -155,8 +157,6 @@ test_ret_t phy_test(void)
 		return FAIL;
 	}
 
-	LOG_HEXDUMP_INF(data_reg_len_reg, DATA_REG_LEN_SIZE, "Read data reg len:");
-
 	return PASS;
 #undef DATA_REG_LEN_SIZE
 }
@@ -165,33 +165,47 @@ test_ret_t phy_test(void)
 static u8_t tmp_buf[TMP_BUF_SIZE] = {0};
 static size_t tmp_buf_len = TMP_BUF_SIZE;
 
-test_ret_t get_data_object_small(void)
-{
-	const u8_t get_data_object_apdu[] = {
-		0x81, /* command code */
-		0x00, /* param, read data */
-		0x00, 0x06, /* Length */
-		0xF1, 0xE0, /* OID */
-		0x00, 0x00, /* Offset */
-		0x00, 0x10,
-	};
+#define TEST_DATA_16_LEN 16
+static u8_t test_data_16[TEST_DATA_16_LEN] = {
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+};
 
-	int res = optiga_nettran_send_apdu(dev,
-		get_data_object_apdu,
-		sizeof(get_data_object_apdu));
-
-	if(res != 0) {
-		return FAIL;
-	}
-
-	k_sleep(500);
-
-	tmp_buf_len = TMP_BUF_SIZE;
-
-	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
-
-	return res ? FAIL : PASS;
-}
+#define TEST_DATA_512_LEN 512
+static const u8_t test_data_512[TEST_DATA_512_LEN] = {
+	0xAA, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0xEF, /* 16 bytes data */
+													/* 512 bytes total */
+};
 
 test_ret_t set_data_object_small(void)
 {
@@ -204,12 +218,9 @@ test_ret_t set_data_object_small(void)
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
 		};
 
-	LOG_INF("Set DO:");
 	int res = optiga_nettran_send_apdu(dev,
 		set_data_object_apdu,
 		sizeof(set_data_object_apdu));
-
-	LOG_INF("APDU send result: %d", res);
 
 	tmp_buf_len = TMP_BUF_SIZE;
 
@@ -219,10 +230,48 @@ test_ret_t set_data_object_small(void)
 		return FAIL;
 	}
 
-	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Set DO response:");
-
 	return res ? FAIL : PASS;
+}
 
+static const u8_t get_data_object_apdu[] = {
+		0x81, /* command code */
+		0x00, /* param, read data */
+		0x00, 0x02, /* Length */
+		0xF1, 0xE0, /* OID */
+};
+
+test_ret_t get_data_object_small(void)
+{
+	int res = optiga_nettran_send_apdu(dev,
+		get_data_object_apdu,
+		sizeof(get_data_object_apdu));
+
+	if(res != 0) {
+		return FAIL;
+	}
+
+	tmp_buf_len = TMP_BUF_SIZE;
+
+	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+
+	if(res != 0) {
+		return FAIL;
+	}
+
+	/* Check error code in response APDU */
+	if (tmp_buf[0] != 0x00) {
+		return FAIL;
+	}
+
+	/* Strip APDU header */
+	const u8_t *tmp_data = tmp_buf + 4;
+	const size_t tmp_data_len = tmp_buf_len - 4;
+
+	if(!equals(tmp_data, tmp_data_len, test_data_16, TEST_DATA_16_LEN)) {
+		return FAIL;
+	}
+
+	return PASS;
 }
 
 test_ret_t set_data_object(void)
@@ -285,14 +334,6 @@ test_ret_t set_data_object(void)
 
 test_ret_t get_data_object(void)
 {
-	const u8_t get_data_object_apdu[] = {
-		0x81, /* command code */
-		0x00, /* param, read data */
-		0x00, 0x02, /* Length */
-		0xF1, 0xE0, /* OID */
-	};
-
-	LOG_INF("Get DO:");
 	int res = optiga_nettran_send_apdu(dev,
 		get_data_object_apdu,
 		sizeof(get_data_object_apdu));
@@ -304,16 +345,72 @@ test_ret_t get_data_object(void)
 	tmp_buf_len = TMP_BUF_SIZE;
 
 	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
-	return res ? FAIL : PASS;
+
+	if(res != 0) {
+		return FAIL;
+	}
+
+	/* Check error code in response APDU */
+	if (tmp_buf[0] != 0x00) {
+		return FAIL;
+	}
+
+	/* Strip APDU header */
+	const u8_t *tmp_data = tmp_buf + 4;
+	const size_t tmp_data_len = tmp_buf_len - 4;
+
+	if(!equals(tmp_data, tmp_data_len, test_data_512, TEST_DATA_512_LEN)) {
+		return FAIL;
+	}
+
+	return PASS;
 }
 
 test_ret_t get_data_object_queued(void)
 {
+	struct optiga_apdu get_do_txrx = {
+		.tx_buf = get_data_object_apdu,
+		.tx_len = sizeof(get_data_object_apdu),
+		.rx_buf = tmp_buf,
+		.rx_len = TMP_BUF_SIZE,
+	};
+
+	optiga_enqueue_apdu(dev, &get_do_txrx);
+
+	struct k_poll_event events[1] = {
+        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+                                 K_POLL_MODE_NOTIFY_ONLY,
+                                 &get_do_txrx.finished),
+	};
+
+	k_poll(events, 1, K_FOREVER);
+
+	int res = events[0].signal->result;
+
+	if(res != 0) {
+		return FAIL;
+	}
+
+	/* Check error code in response APDU */
+	if (get_do_txrx.rx_buf[0] != 0x00) {
+		return FAIL;
+	}
+
+	/* Strip APDU header */
+	const u8_t *tmp_data = get_do_txrx.rx_buf + 4;
+	const size_t tmp_data_len = get_do_txrx.rx_len - 4;
+
+	if(!equals(tmp_data, tmp_data_len, test_data_512, TEST_DATA_512_LEN)) {
+		return FAIL;
+	}
+
+	return PASS;
+}
+
+test_ret_t invalid_apdu_queued(void)
+{
 	const u8_t get_data_object_apdu[] = {
-		0x81, /* command code */
-		0x00, /* param, read data */
-		0x00, 0x02, /* Length */
-		0xF1, 0xE0, /* OID */
+		0x00, /* Invalid command code */
 	};
 
 	struct optiga_apdu get_do_txrx = {
@@ -335,9 +432,160 @@ test_ret_t get_data_object_queued(void)
 
 	int result_code = events[0].signal->result;
 
-	return result_code ? FAIL : PASS;
+	return result_code ? PASS : FAIL;
 }
 
+test_ret_t init_command_lib(void)
+{
+	/* Initialize the command library */
+	int res = ifx_optiga_trust_init(&ctx, dev, apdu_buf, IFX_OPTIGA_TRUST_MAX_APDU_SIZE);
+	return res ? FAIL : PASS;
+}
+
+test_ret_t lib_set_data_object(void)
+{
+	int res = ifx_optiga_data_set(&ctx, 0xF1E1, true, 0, test_data_512, TEST_DATA_512_LEN);
+	return res ? FAIL : PASS;
+}
+
+test_ret_t lib_verify_data_object(void)
+{
+	tmp_buf_len = TMP_BUF_SIZE;
+	memset(tmp_buf, 0, TMP_BUF_SIZE);
+
+	/* read device certificate */
+	int res = ifx_optiga_data_get(&ctx, 0xF1E1, 0, tmp_buf, &tmp_buf_len);
+	if (res != 0) {
+		return FAIL;
+	}
+
+	if (!equals(tmp_buf, tmp_buf_len, test_data_512, TEST_DATA_512_LEN)) {
+		return FAIL;
+	}
+
+	return PASS;
+}
+
+test_ret_t lib_extract_cert(void)
+{
+	tmp_buf_len = TMP_BUF_SIZE;
+	memset(tmp_buf, 0, TMP_BUF_SIZE);
+
+	/* read device certificate */
+	int res = ifx_optiga_data_get(&ctx, 0xE0E0, 0, tmp_buf, &tmp_buf_len);
+	if (res != 0) {
+		return FAIL;
+	}
+
+	if (is_zeroed(tmp_buf, tmp_buf_len)) {
+		return FAIL;
+	}
+
+	/* Write the stripped device certificate to another data object */
+	res = ifx_optiga_data_set(&ctx, 0xE0E1, true, 0, tmp_buf + 9, tmp_buf_len - 9);
+
+	return res ? FAIL : PASS;
+}
+
+#define TEST_DIGEST_LEN 32
+static u8_t test_digest[TEST_DIGEST_LEN] = {
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+};
+
+static u8_t test_signature[IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN] = {0};
+
+test_ret_t lib_sign_verify_good(void)
+{
+	/* Use the device key to create a signature */
+	int res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
+		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	if (res != 0) {
+		return FAIL;
+	}
+
+	if (is_zeroed(test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN)) {
+		return FAIL;
+	}
+
+	/* Verify the signature using the stripped certificate */
+	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
+		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+
+	return res ? FAIL : PASS;
+}
+
+test_ret_t sign_verify_bad_hash(void)
+{
+	/* Use the device key to create a signature */
+	int res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
+		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	if (res != 0) {
+		return FAIL;
+	}
+
+	if (is_zeroed(test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN)) {
+		return FAIL;
+	}
+
+	/* Flip a bit in the hash to trigger a verification fail */
+	test_digest[7] ^= 1 << 5;
+
+	/* Verify the signature using the wrong hash */
+	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
+		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+
+	/* Fix hash for following tests */
+	test_digest[7] ^= 1 << 5;
+
+	/* Signature check should not pass */
+	return res ? PASS : FAIL;
+}
+
+test_ret_t sign_verify_bad_sig(void)
+{
+	/* Use the device key to create a signature */
+	int res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
+		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	if (res != 0) {
+		return FAIL;
+	}
+
+	if (is_zeroed(test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN)) {
+		return FAIL;
+	}
+
+	/* Flip a bit in the signature to trigger a verification fail */
+	test_signature[7] ^= 1 << 5;
+
+	/* Verify the signature using the wrong signature */
+	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
+		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+
+	return res ? PASS : FAIL;
+}
+
+test_ret_t lib_compare_sha256(void)
+{
+	u8_t digest1[32] = {0};
+	u8_t digest2[32] = {
+		0xa5, 0xb6, 0x08, 0x71, 0x96, 0x40, 0x69, 0xb8, 0xc9, 0x3c, 0xc8, 0x40, 0x38, 0x6c, 0x2f, 0x4b,
+		0x0f, 0x54, 0xb0, 0xa7, 0xb2, 0xd7, 0x12, 0x90, 0x3a, 0x1c, 0x1b, 0x54, 0x4b, 0xa4, 0x90, 0x60
+	};
+
+	size_t digest1_len = 32;
+	int res = ifx_optiga_hash_sha256_oid(&ctx, 0xF1E1, 0, TEST_DATA_512_LEN, digest1, &digest1_len);
+
+	if(res != 0) {
+		return FAIL;
+	}
+
+	if(!equals(digest1, 32, digest2, 32)) {
+		return FAIL;
+	}
+
+	return PASS;
+}
 
 void run_tests()
 {
@@ -353,11 +601,25 @@ void run_tests()
 	failed_cnt += run_timed(get_data_object_small, "APDU Get DO small");
 
 	failed_cnt += run_timed(set_data_object, "APDU Set DO");
-	failed_cnt += run_timed(get_data_object_small, "APDU Get DO");
-	failed_cnt += run_timed(get_data_object_small, "APDU Get DO queued");
+	failed_cnt += run_timed(get_data_object, "APDU Get DO");
+	failed_cnt += run_timed(get_data_object_queued, "APDU Get DO queued");
 
-	if (failed_cnt > 0) {
-		LOG_ERR("Failed test count: %d", failed_cnt);
-	}
-	__ASSERT(failed_cnt == 0, "None of these tests should fail");
+	failed_cnt += run_timed(invalid_apdu_queued, "Invalid APDU");
+
+	/* Tests with Trust X/M lib */
+	/* Data Object */
+	failed_cnt += run_timed(init_command_lib, "Init Command Lib");
+	failed_cnt += run_timed(lib_set_data_object, "Write Data Object");
+	failed_cnt += run_timed(lib_verify_data_object, "Verify Data Object");
+
+	/* ECC */
+	failed_cnt += run_timed(lib_extract_cert, "Extract Certificate");
+	failed_cnt += run_timed(lib_sign_verify_good, "Sign-Verify Good");
+	failed_cnt += run_timed(lib_sign_verify_good, "Sign-Verify Bad Hash");
+	failed_cnt += run_timed(lib_sign_verify_good, "Sign-Verify Bad Sig");
+
+	/* SHA256 */
+	failed_cnt += run_timed(lib_compare_sha256, "Compare SHA256");
+
+	LOG_INF("Failed test count: %d", failed_cnt);
 }
