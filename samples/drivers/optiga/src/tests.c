@@ -94,7 +94,7 @@ extern struct device *dev;
 /* APDU buffer for the command library */
 static u8_t apdu_buf[IFX_OPTIGA_TRUST_MAX_APDU_SIZE] = {0};
 /* Command library context */
-struct ifx_optiga_trust_ctx ctx;
+struct optrust_ctx ctx;
 
 test_ret_t phy_test(void)
 {
@@ -438,13 +438,13 @@ test_ret_t invalid_apdu_queued(void)
 test_ret_t init_command_lib(void)
 {
 	/* Initialize the command library */
-	int res = ifx_optiga_trust_init(&ctx, dev, apdu_buf, IFX_OPTIGA_TRUST_MAX_APDU_SIZE);
+	int res = optrust_init(&ctx, dev, apdu_buf, IFX_OPTIGA_TRUST_MAX_APDU_SIZE);
 	return res ? FAIL : PASS;
 }
 
 test_ret_t lib_set_data_object(void)
 {
-	int res = ifx_optiga_data_set(&ctx, 0xF1E1, true, 0, test_data_512, TEST_DATA_512_LEN);
+	int res = optrust_data_set(&ctx, 0xF1E1, true, 0, test_data_512, TEST_DATA_512_LEN);
 	return res ? FAIL : PASS;
 }
 
@@ -454,7 +454,7 @@ test_ret_t lib_verify_data_object(void)
 	memset(tmp_buf, 0, TMP_BUF_SIZE);
 
 	/* read device certificate */
-	int res = ifx_optiga_data_get(&ctx, 0xF1E1, 0, tmp_buf, &tmp_buf_len);
+	int res = optrust_data_get(&ctx, 0xF1E1, 0, tmp_buf, &tmp_buf_len);
 	if (res != 0) {
 		return FAIL;
 	}
@@ -472,7 +472,7 @@ test_ret_t lib_extract_cert(void)
 	memset(tmp_buf, 0, TMP_BUF_SIZE);
 
 	/* read device certificate */
-	int res = ifx_optiga_data_get(&ctx, 0xE0E0, 0, tmp_buf, &tmp_buf_len);
+	int res = optrust_data_get(&ctx, 0xE0E0, 0, tmp_buf, &tmp_buf_len);
 	if (res != 0) {
 		return FAIL;
 	}
@@ -482,7 +482,7 @@ test_ret_t lib_extract_cert(void)
 	}
 
 	/* Write the stripped device certificate to another data object */
-	res = ifx_optiga_data_set(&ctx, 0xE0E1, true, 0, tmp_buf + 9, tmp_buf_len - 9);
+	res = optrust_data_set(&ctx, 0xE0E1, true, 0, tmp_buf + 9, tmp_buf_len - 9);
 
 	return res ? FAIL : PASS;
 }
@@ -493,24 +493,24 @@ static u8_t test_digest[TEST_DIGEST_LEN] = {
 	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
 };
 
-static u8_t test_signature[IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN] = {0};
+static u8_t test_signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = {0};
 
 test_ret_t lib_sign_verify_good(void)
 {
 	/* Use the device key to create a signature */
-	int res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
-		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	int res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
+		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
 	if (res != 0) {
 		return FAIL;
 	}
 
-	if (is_zeroed(test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN)) {
+	if (is_zeroed(test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN)) {
 		return FAIL;
 	}
 
 	/* Verify the signature using the stripped certificate */
-	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
-		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	res = optrust_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
+		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
 
 	return res ? FAIL : PASS;
 }
@@ -518,13 +518,13 @@ test_ret_t lib_sign_verify_good(void)
 test_ret_t sign_verify_bad_hash(void)
 {
 	/* Use the device key to create a signature */
-	int res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
-		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	int res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
+		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
 	if (res != 0) {
 		return FAIL;
 	}
 
-	if (is_zeroed(test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN)) {
+	if (is_zeroed(test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN)) {
 		return FAIL;
 	}
 
@@ -532,8 +532,8 @@ test_ret_t sign_verify_bad_hash(void)
 	test_digest[7] ^= 1 << 5;
 
 	/* Verify the signature using the wrong hash */
-	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
-		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	res = optrust_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
+		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
 
 	/* Fix hash for following tests */
 	test_digest[7] ^= 1 << 5;
@@ -545,13 +545,13 @@ test_ret_t sign_verify_bad_hash(void)
 test_ret_t sign_verify_bad_sig(void)
 {
 	/* Use the device key to create a signature */
-	int res = ifx_optiga_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
-		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	int res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
+		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
 	if (res != 0) {
 		return FAIL;
 	}
 
-	if (is_zeroed(test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN)) {
+	if (is_zeroed(test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN)) {
 		return FAIL;
 	}
 
@@ -559,8 +559,8 @@ test_ret_t sign_verify_bad_sig(void)
 	test_signature[7] ^= 1 << 5;
 
 	/* Verify the signature using the wrong signature */
-	res = ifx_optiga_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
-		test_signature, IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN);
+	res = optrust_ecdsa_verify_oid(&ctx, 0xE0E1, test_digest, TEST_DIGEST_LEN,
+		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
 
 	return res ? PASS : FAIL;
 }
@@ -574,7 +574,7 @@ test_ret_t lib_compare_sha256(void)
 	};
 
 	size_t digest1_len = 32;
-	int res = ifx_optiga_hash_sha256_oid(&ctx, 0xF1E1, 0, TEST_DATA_512_LEN, digest1, &digest1_len);
+	int res = optrust_sha256_oid(&ctx, 0xF1E1, 0, TEST_DATA_512_LEN, digest1, &digest1_len);
 
 	if(res != 0) {
 		return FAIL;

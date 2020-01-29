@@ -14,16 +14,16 @@
 #include <drivers/crypto/optiga.h>
 
 // TODO(chr): find the maximum APDU size value
-#define IFX_OPTIGA_TRUST_MAX_APDU_SIZE 1600
+#define OPTRUST_MAX_APDU_SIZE 1600
 
-struct ifx_optiga_trust_ctx {
+struct optrust_ctx {
 	struct device *dev;
 	u8_t *apdu_buf;
 	size_t apdu_buf_len;
 	struct optiga_apdu apdu;
 };
 
-/*
+/**
  * @brief Initialize a command context and bind it to a device
  *
  * @param ctx context to initialize
@@ -31,15 +31,15 @@ struct ifx_optiga_trust_ctx {
  * @param apdu_buf send and receive buffer for the APDU
  * @param apdu_buf_len length of apdu_buf
  */
-int ifx_optiga_trust_init(struct ifx_optiga_trust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len);
+int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len);
 
-/*
- * @brief Free and unbind the command context
+/**
+ * @brief Deallocate all resources and unbind the command context
  * @param ctx context to free
  */
-void ifx_optiga_trust_free(struct ifx_optiga_trust_ctx *ctx);
+void optrust_deinit(struct optrust_ctx *ctx);
 
-/*
+/**
  * @brief Read data from a data object in the OPTIGA
  *
  * @param ctx Command context to use
@@ -49,9 +49,9 @@ void ifx_optiga_trust_free(struct ifx_optiga_trust_ctx *ctx);
  * @param len Must be set to the length of buf and returns the number of data bytes read
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_data_get(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
+int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
 
-/*
+/**
  * @brief Write data to a data object in the OPTIGA
  *
  * @param ctx Command context to use
@@ -62,28 +62,28 @@ int ifx_optiga_data_get(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs
  * @param len length of buf
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_data_set(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
+int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
 
 
-#define IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN 64
-#define IFX_OPTIGA_TRUST_NIST_P384_PUB_KEY_LEN 96
+#define OPTRUST_NIST_P256_PUB_KEY_LEN 64
+#define OPTRUST_NIST_P384_PUB_KEY_LEN 96
 
-enum IFX_OPTIGA_TRUST_ALGORITHM {
-	IFX_OPTIGA_TRUST_ALGORITHM_NIST_P256 = 0x03,
-	IFX_OPTIGA_TRUST_ALGORITHM_NIST_P384 = 0x04,
-	IFX_OPTIGA_TRUST_ALGORITHM_SHA256	= 0xE2
+enum OPTRUST_ALGORITHM {
+    OPTRUST_ALGORITHM_NIST_P256 = 0x03,
+    OPTRUST_ALGORITHM_NIST_P384 = 0x04,
+    OPTRUST_ALGORITHM_SHA256	= 0xE2
 };
 
-enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG {
-	IFX_OPTIGA_TRUST_KEY_USAGE_FLAG_AUTH	= 0x01,
-	IFX_OPTIGA_TRUST_KEY_USAGE_FLAG_ENC = 0x02,
-	IFX_OPTIGA_TRUST_KEY_USAGE_FLAG_HOST_FW_UPDATE = 0x04,
-	IFX_OPTIGA_TRUST_KEY_USAGE_FLAG_DEV_MGMT = 0x08,
-	IFX_OPTIGA_TRUST_KEY_USAGE_FLAG_SIGN = 0x10,
+enum OPTRUST_KEY_USAGE_FLAG {
+    OPTRUST_KEY_USAGE_FLAG_AUTH	= 0x01,
+    OPTRUST_KEY_USAGE_FLAG_ENC = 0x02,
+    OPTRUST_KEY_USAGE_FLAG_HOST_FW_UPDATE = 0x04,
+    OPTRUST_KEY_USAGE_FLAG_DEV_MGMT = 0x08,
+    OPTRUST_KEY_USAGE_FLAG_SIGN = 0x10,
 };
 
-/*
- * @brief Generate an ECDSA key pair and export the public key
+/**
+ * @brief Generate an ECC key pair and export the public key
  *
  * @param ctx Command context to use
  * @param oid Object ID to store the private key
@@ -95,13 +95,13 @@ enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG {
  *
  * @note The size of the public key buffer must match the selected algorithm or be bigger.
  */
-int ifx_optiga_ecc_key_pair_gen_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
-				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
+int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
 
-#define IFX_OPTIGA_TRUST_NIST_P256_SIGNATURE_LEN 64
-#define IFX_OPTIGA_TRUST_NIST_P384_SIGNATURE_LEN 96
+#define OPTRUST_NIST_P256_SIGNATURE_LEN 64
+#define OPTRUST_NIST_P384_SIGNATURE_LEN 96
 
-/*
+/**
  * @brief Sign a digest using a private key in the OPTIGA
  *
  * @param ctx Command context to use
@@ -112,9 +112,9 @@ int ifx_optiga_ecc_key_pair_gen_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid,
  * @param signature_len Length of signature buffer, contains length of signature afterwards.
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_ecdsa_sign_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
+int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
 
-/*
+/**
  * @brief Verify a signature using a public key in the OPTIGA
  *
  * @param ctx Command context to use
@@ -125,11 +125,13 @@ int ifx_optiga_ecdsa_sign_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const
  * @param signature_len Length of signature
  * @return 0 if the signature matches, error code otherwise
  */
-int ifx_optiga_ecdsa_verify_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
-
-/* The following APIs are drafts for now */
+int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
 
 /*
+ *  The following APIs are drafts for now
+ */
+
+/**
  * @brief Generate an ECDSA key pair and export private and public key
  *
  * @param ctx Command context to use
@@ -143,13 +145,13 @@ int ifx_optiga_ecdsa_verify_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, con
  *
  * @note The size of the public and private key buffers must match the selected algorithm or be bigger.
  */
-int ifx_optiga_ecc_key_pair_gen(struct ifx_optiga_trust_ctx *ctx,
-				enum IFX_OPTIGA_TRUST_ALGORITHM alg,
-				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage,
+int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
+                enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage,
 				u8_t* priv_key, size_t * priv_key_len,
 				u8_t *pub_key, size_t *pub_key_len);
 
-/*
+/**
  * @brief Perform an ECDH operation on a shared secret to derive a key
  *
  * @param ctx Command context to use
@@ -160,11 +162,11 @@ int ifx_optiga_ecc_key_pair_gen(struct ifx_optiga_trust_ctx *ctx,
  * @param key_len Length of key
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_ecdh_compute(struct ifx_optiga_trust_ctx *ctx, u16_t shared_secret_oid,
+int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t shared_secret_oid,
 				const u8_t *deriv_data, size_t deriv_data_len,
 				u8_t *key, size_t key_len);
 
-/*
+/**
  * @brief Perform an ECDH operation on a shared secret to derive a key and store it in a session context
  *
  * @param ctx Command context to use
@@ -175,11 +177,11 @@ int ifx_optiga_ecdh_compute(struct ifx_optiga_trust_ctx *ctx, u16_t shared_secre
  * @param key_oid OID to store the derived key
  * @return 0 on success, error code otherwise
  */
-int ifx_optiga_ecdh_compute_oid(struct ifx_optiga_trust_ctx *ctx, u16_t shared_secret_oid,
+int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t shared_secret_oid,
 				const u8_t *deriv_data, size_t deriv_data_len,
 				size_t key_len, u16_t key_oid);
 
-/*
+/**
  * @brief Verify a signature using a public key provided by the host
  *
  * @param ctx Command context to use
@@ -192,20 +194,47 @@ int ifx_optiga_ecdh_compute_oid(struct ifx_optiga_trust_ctx *ctx, u16_t shared_s
  * @param signature_len Length of signature
  * @return 0 if the signature matches, error code otherwise
  */
-int ifx_optiga_ecdsa_verify_host(struct ifx_optiga_trust_ctx *ctx, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
+int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
 				const u8_t *pub_key, size_t pub_key_len,
 				const u8_t *digest, size_t digest_len,
 				const u8_t *signature, size_t signature_len);
 
-int ifx_optiga_metadata_get(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Read metadata from a data object
+ * @param ctx Command context to use
+ * @param oid OID of the data object
+ * @param data Output buffer for the data object
+ * @param data_len Length of the output buffer, contains length of metadata afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t *data_len);
 
-int ifx_optiga_metadata_set(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Set metadata of a data object
+ * @param ctx Command context to use
+ * @param oid OID of the data object
+ * @param data metadata to write
+ * @param data_len length of data
+ * @return 0 on success, error code otherwise
+ */
+int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len);
 
-#define IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN 32
+#define OPTRUST_SHA256_DIGEST_LEN 32
 
-int ifx_optiga_hash_sha256(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Hash data passed by the host
+ *
+ * @param ctx Command context to use
+ * @param data Data to hash
+ * @param data_len Length of data
+ * @param digest Output buffer for the computed digest
+ * @param digest_len Length of digest, contains the length of the computed digest afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_len,
+                       u8_t *digest, size_t *digest_len);
 
-/*
+/**
  * @brief Hash data from an OID
  *
  * @param ctx Command context to use
@@ -214,24 +243,76 @@ int ifx_optiga_hash_sha256(struct ifx_optiga_trust_ctx *ctx);
  * @param len Number of bytes to hash
  * @param digest Computed digest
  * @param digest_len Length of digest, contains the length of the computed digest afterwards
- * @return 0 if the signature matches, error code otherwise
+ * @return 0 on success, error code otherwise
  */
-int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
+int optrust_sha256_oid(struct optrust_ctx *ctx,
 				u16_t oid, size_t offs, size_t len,
 				u8_t *digest, size_t *digest_len);
 
-int ifx_optiga_rng_generate(struct ifx_optiga_trust_ctx *ctx);
+enum OPTRUST_RNG_TYPE {
+    OPTRUST_RNG_TYPE_TRNG	= 0x00,
+    OPTRUST_RNG_TYPE_DRNG	= 0x01,
+};
 
-int ifx_optiga_tls1_2_prf_sha256_compute(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Generate random bytes
+ * @param ctx Command context to use
+ * @param type Type of the RNG to use
+ * @param rnd Output buffer for the random bytes
+ * @param rnd_len Size of the output buffer
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
 
-int ifx_optiga_set_auth_scheme(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Compute the TLS1.2 PRF and export the result to the host
+ * @param ctx Command context to use
+ * @param ssec_oid OID of the shared secret
+ * @param data Key derivation data
+ * @param data_len Length of data
+ * @param key Output buffer for the derived key
+ * @param key_len Length of the derived key
+ * @return 0 on success, error code otherwise
+ */
+int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t ssec_oid, const u8_t *data, size_t data_len, u8_t *key, size_t key_len);
 
-int ifx_optiga_get_auth_msg(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Compute the TLS1.2 PRF and store the result in a data object
+ * @param ctx Command context to use
+ * @param ssec_oid OID of the shared secret
+ * @param data Key derivation data
+ * @param data_len Length of data
+ * @param key_oid OID to store the key in
+ * @param key_len Length of the derived key
+ * @return 0 on success, error code otherwise
+ */
+int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t ssec_oid, const u8_t *data, size_t data_len, u16_t key_oid, size_t key_len);
 
-int ifx_optiga_set_auth_msg(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Perform one way authentication, see Table 24 - One-way authentication sequence
+ * @param ctx Command context to use
+ * @param priv_key_oid OID of the private key to use
+ * @param msg The message to authenticate
+ * @param msg_len Length of msg
+ * @param resp Output buffer for the response
+ * @param resp_len Length of resp, contains the length of the computed response afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_auth_ecdsa_sha256(struct optrust_ctx *ctx, u16_t priv_key_oid, const u8_t *msg, size_t msg_len, u8_t *resp, size_t *resp_len);
 
-int ifx_optiga_proc_downlink_msg(struct ifx_optiga_trust_ctx *ctx);
+/**
+ * @brief Setup a session context for DTLS
+ * @param ctx Command context to use
+ * @param priv_key_oid OID of the private key to use
+ * @param session_oid OID of the session context to use
+ * @return 0 on success, error code otherwise
+ */
+int optrust_dtls_init(struct optrust_ctx *ctx, u16_t priv_key_oid, u16_t session_oid);
 
-int ifx_optiga_proc_uplink_msg(struct ifx_optiga_trust_ctx *ctx);
+// TODO(chr): define the API for this function
+int optrust_dtls_downlink_msg(struct optrust_ctx *ctx);
+
+// TOOD(chr): define the API for this function
+int optrust_dtls_uplink_msg(struct optrust_ctx *ctx);
 
 #endif /* IFX_OPTIGA_TRUST_X_H_ */

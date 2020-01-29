@@ -93,7 +93,7 @@ static size_t cmds_get_apdu_header(u8_t *apdu_start, u8_t *sta, u16_t *out_len)
 }
 
 
-int ifx_optiga_trust_init(struct ifx_optiga_trust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
+int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
 {
 	ctx->dev = dev;
 	ctx->apdu_buf = apdu_buf;
@@ -102,11 +102,11 @@ int ifx_optiga_trust_init(struct ifx_optiga_trust_ctx *ctx, struct device *dev, 
 	return 0;
 }
 
-void ifx_optiga_trust_free(struct ifx_optiga_trust_ctx *ctx)
+void optrust_deinit(struct optrust_ctx *ctx)
 {
 }
 
-static int cmds_submit_apdu(struct ifx_optiga_trust_ctx *ctx)
+static int cmds_submit_apdu(struct optrust_ctx *ctx)
 {
 	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
 
@@ -121,7 +121,7 @@ static int cmds_submit_apdu(struct ifx_optiga_trust_ctx *ctx)
 }
 
 #define OPTIGA_GET_DATA_CMD_LEN 10
-int ifx_optiga_data_get(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
+int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_DATA_CMD_LEN, "APDU buffer too small");
@@ -188,7 +188,7 @@ int ifx_optiga_data_get(struct ifx_optiga_trust_ctx *ctx, u16_t oid, size_t offs
 	return 0;
 }
 
-int ifx_optiga_data_set(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
+int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -236,7 +236,7 @@ int ifx_optiga_data_set(struct ifx_optiga_trust_ctx *ctx, u16_t oid, bool erase,
 	return 0;
 }
 
-int ifx_optiga_ecdsa_sign_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
+int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -301,7 +301,7 @@ int ifx_optiga_ecdsa_sign_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const
 	return 0;
 }
 
-int ifx_optiga_ecdsa_verify_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
+int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 
@@ -380,25 +380,25 @@ int ifx_optiga_ecdsa_verify_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, con
 	return 0;
 }
 
-int ifx_optiga_ecc_key_pair_gen_oid(struct ifx_optiga_trust_ctx *ctx, u16_t oid, enum IFX_OPTIGA_TRUST_ALGORITHM alg,
-				enum IFX_OPTIGA_TRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
 {
 	u8_t *tx_buf = ctx->apdu_buf;
 	__ASSERT(ctx->apdu_buf_len >= 11, "APDU buffer too small");
 	__ASSERT(pub_key_len != NULL, "Invalid NULL pointer");
 
 	switch(alg) {
-		case IFX_OPTIGA_TRUST_ALGORITHM_NIST_P256:
-			if(*pub_key_len < IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN) {
+        case OPTRUST_ALGORITHM_NIST_P256:
+            if(*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN) {
 				return -EINVAL;
 			}
-			*pub_key_len = IFX_OPTIGA_TRUST_NIST_P256_PUB_KEY_LEN;
+            *pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
 			break;
-		case IFX_OPTIGA_TRUST_ALGORITHM_NIST_P384:
-			if(*pub_key_len < IFX_OPTIGA_TRUST_NIST_P384_PUB_KEY_LEN) {
+        case OPTRUST_ALGORITHM_NIST_P384:
+            if(*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN) {
 				return -EINVAL;
 			}
-			*pub_key_len = IFX_OPTIGA_TRUST_NIST_P384_PUB_KEY_LEN;
+            *pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
 			break;
 		default:
 			return -EINVAL;
@@ -479,7 +479,7 @@ enum OPTIGA_TRUSTX_CALC_HASH_TAGS {
 	OPTIGA_TRUSTX_CALC_HASH_OID_FINAL_KEEP = 0x15,
 };
 
-int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
+int optrust_sha256_oid(struct optrust_ctx *ctx,
 				u16_t oid, size_t offs, size_t len,
 				u8_t *digest, size_t *digest_len)
 {
@@ -489,7 +489,7 @@ int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
 
 	tx_buf += cmds_set_apdu_header(tx_buf,
 				OPTIGA_TRUSTX_CMD_CALC_HASH,
-				IFX_OPTIGA_TRUST_ALGORITHM_SHA256, /* Param */
+                OPTRUST_ALGORITHM_SHA256, /* Param */
 				9 /* Length of the Tx APDU */
 			);
 
@@ -539,7 +539,7 @@ int ifx_optiga_hash_sha256_oid(struct ifx_optiga_trust_ctx *ctx,
 
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-	__ASSERT(out_len == (IFX_OPTIGA_TRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
+    __ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
 
 	/* Skip Tag + Length */
 	rx_buf += 3;
