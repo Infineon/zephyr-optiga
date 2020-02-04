@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(main);
 struct device *dev = NULL;
 
 /* APDU buffer for the command library */
-static u8_t apdu_buf[IFX_OPTIGA_TRUST_MAX_APDU_SIZE] = {0};
+static u8_t apdu_buf[OPTRUST_MAX_APDU_SIZE] = {0};
 
 /* Buffer for the device certificate of the OPTIGA */
 #define CERT_BUFFER_LEN 1024
@@ -45,7 +45,7 @@ void main(void)
 	struct optrust_ctx ctx;
 
 	/* Initialize the command library */
-	int res = optrust_init(&ctx, dev, apdu_buf, IFX_OPTIGA_TRUST_MAX_APDU_SIZE);
+	int res = optrust_init(&ctx, dev, apdu_buf, OPTRUST_MAX_APDU_SIZE);
 
 	LOG_INF("ifx_optiga_trust_init res: %d", res);
 
