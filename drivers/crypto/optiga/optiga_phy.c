@@ -34,11 +34,11 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_REG_ADDR_SOFT_RESET		0x88
 #define OPTIGA_REG_ADDR_I2C_MODE		0x89
 
-#define OPTIGA_DELAYED_ACK_TRIES 10
-#define OPTIGA_DELAYED_ACK_TIME_MS 10
+#define OPTIGA_DELAYED_ACK_TRIES 20
+#define OPTIGA_DELAYED_ACK_TIME_MS 8
 
 #define OPTIGA_STATUS_POLL_TRIES 20
-#define OPTIGA_STATUS_POLL_TIME_MS 10
+#define OPTIGA_STATUS_POLL_TIME_MS 8
 
 /* Helper function for late acknowledge write transfers */
 int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
