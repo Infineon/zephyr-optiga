@@ -23,7 +23,7 @@ size_t cert_len = CERT_BUFFER_LEN;
 #define DIGEST_LEN 32
 
 // set to '1' to run additional tests
-#define RUN_TESTS 1
+#define RUN_TESTS 0
 
 void main(void)
 {
@@ -123,8 +123,5 @@ void main(void)
 	LOG_INF("ifx_optiga_hash_sha256_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(hash_buf, OPTRUST_SHA256_DIGEST_LEN, "Hash:");
 
-
-	while(true) {
-		k_sleep(1000);
-	}
+	LOG_INF("Example finished");
 }
