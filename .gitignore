@@ -50,3 +50,4 @@ TAGS
 tags
 
 .idea
+/samples/drivers/optiga/CMakeLists.txt.user
