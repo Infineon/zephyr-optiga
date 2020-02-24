@@ -21,6 +21,7 @@ LOG_MODULE_REGISTER(optiga);
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
+#define OPTIGA_HIBERNATE_DELAY_MS 500
 
 static void optiga_worker(void* arg1, void *arg2, void *arg3);
 
@@ -38,12 +39,19 @@ static const u8_t error_code_apdu[] =
 
 #define OPTIGA_APDU_STA_OFFSET 0
 #define OPTIGA_APDU_STA_SUCCESS 0
+#define OPTIGA_APDU_OUT_DATA_OFFSET 4
 
 #define OPTIGA_OPEN_APPLICATION_RESPONSE_LEN 4
-static const u8_t optiga_open_application_apdu[] =
+
+#define OPTIGA_OPEN_APPLICATION_LEN 20
+#define OPTIGA_RESTORE_APPLICATION_LEN 28
+#define OPTIGA_PARAM_OFFS 1
+#define OPTIGA_CTX_HANDLE_LEN 8
+
+static const u8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
 {
 	0xF0, /* command code */
-	0x00, /* clean context */
+	0x00, /* Param */
 	0x00, 0x10, /* 16 bytes parameter */
 	/* unique application identifier */
 	0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
@@ -52,23 +60,35 @@ static const u8_t optiga_open_application_apdu[] =
 /*
  * Initializes the application on the OPTIGA chip
  */
-static int optiga_open_application(struct device *dev)
+static int optiga_open_application(struct device *dev, const u8_t *handle)
 {
-	int err = optiga_nettran_send_apdu(dev,
-		optiga_open_application_apdu,
-		sizeof(optiga_open_application_apdu));
-	if(err != 0) {
+	u8_t tmp_buf[OPTIGA_RESTORE_APPLICATION_LEN] = {0};
+	size_t tmp_buf_len = 0;
+	struct optiga_data *data = dev->driver_data;
+	/* on all error paths the application is not opened */
+	data->open = false;
+
+	memcpy(tmp_buf, optiga_open_application_apdu, OPTIGA_OPEN_APPLICATION_LEN);
+
+	if (handle == NULL) {
+		tmp_buf_len = OPTIGA_OPEN_APPLICATION_LEN;
+	} else {
+		tmp_buf[OPTIGA_PARAM_OFFS] = 0x01; // TODO(chr): extract constant
+		memcpy(tmp_buf + OPTIGA_OPEN_APPLICATION_LEN, handle, OPTIGA_CTX_HANDLE_LEN);
+		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
+	}
+
+	int err = optiga_nettran_send_apdu(dev,	tmp_buf, tmp_buf_len);
+	if (err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
 		return err;
 	}
-
-	u8_t tmp_buf[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = {0};
-	size_t tmp_buf_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
 	/* Expected response to "OpenApplication" */
 	static const u8_t resp[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = {0};
 	static const size_t resp_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
+	tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
@@ -80,6 +100,62 @@ static int optiga_open_application(struct device *dev)
 		return -EIO;
 	}
 
+	data->open = true;
+	return 0;
+}
+
+#define OPTIGA_CLOSE_APPLICATION_LEN 4
+
+static const u8_t optiga_close_application_apdu[OPTIGA_CLOSE_APPLICATION_LEN] =
+{
+	0xF1, /* command code */
+	0x00, /* Param */
+	0x00, 0x00, /* No InData */
+};
+
+static int optiga_close_application(struct device *dev, u8_t *handle)
+{
+	u8_t tmp_buf[OPTIGA_CTX_HANDLE_LEN] = {0};
+	size_t tmp_buf_len = 0;
+	struct optiga_data *data = dev->driver_data;
+
+	memcpy(tmp_buf, optiga_close_application_apdu, OPTIGA_CLOSE_APPLICATION_LEN);
+	tmp_buf_len = OPTIGA_CLOSE_APPLICATION_LEN;
+
+	if (handle != NULL) {
+		tmp_buf[OPTIGA_PARAM_OFFS] = 0x01; // TODO(chr): extract constant
+	}
+
+	int err = optiga_nettran_send_apdu(dev,	tmp_buf, tmp_buf_len);
+	if(err != 0) {
+		LOG_ERR("Failed to send OpenApplication APDU");
+		return err;
+	}
+
+	tmp_buf_len = OPTIGA_CTX_HANDLE_LEN;
+	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (err != 0) {
+		LOG_INF("Failed to get OpenApplication APDU response");
+		return err;
+	}
+
+	if (handle != NULL) {
+		if (tmp_buf_len != (OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET)
+			|| tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS)
+		{
+			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+			return -EIO;
+		}
+
+		memcpy(handle, tmp_buf + OPTIGA_APDU_OUT_DATA_OFFSET, OPTIGA_CTX_HANDLE_LEN);
+	} else {
+		if (tmp_buf_len != 2 ||  tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS) {
+			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+			return -EIO;
+		}
+	}
+
+	data->open = false;
 	return 0;
 }
 
@@ -147,7 +223,7 @@ int optiga_reset(struct device *dev)
 		return err;
 	}
 
-	err = optiga_open_application(dev);
+	err = optiga_open_application(dev, NULL);
 	if(err != 0) {
 		LOG_ERR("Failed to open the OPTIGA application");
 		return err;
@@ -226,7 +302,18 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 
 	/* execute forevever */
 	while (true) {
-		struct optiga_apdu *apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
+		struct optiga_apdu *apdu = NULL;
+		if (data->open) {
+			apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY_MS);
+			if (apdu == NULL) {
+				// TODO(chr): send OPTIGA to hibernate and turn of VCC
+				continue;
+			}
+		} else {
+			apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
+			// TODO(chr): Turn on VCC and restore OPTIGA state
+		}
+
 		if (data->reset_counter > OPTIGA_MAX_RESET) {
 			/* Return an error for all further requests */
 			LOG_ERR("Maximum OPTIGA reset count reached");

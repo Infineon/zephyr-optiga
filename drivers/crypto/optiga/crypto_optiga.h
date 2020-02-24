@@ -20,6 +20,7 @@ struct optiga_data {
 	struct k_thread worker;
 	k_thread_stack_t *worker_stack;
 	int reset_counter;
+	bool open;
 };
 
 struct optiga_cfg {
