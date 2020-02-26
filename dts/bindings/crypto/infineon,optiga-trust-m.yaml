@@ -1,0 +1,16 @@
+# Copyright (c) 2019 - 2020, Infineon Technologies AG
+# SPDX-License-Identifier: Apache-2.0
+
+description: >
+    This is a representation of the OPTIGA Trust M security controller
+
+compatible: "infineon,optiga-trust-m"
+
+include: i2c-device.yaml
+
+properties:
+    power-gpios:
+      type: phandle-array
+      required: false
+      description: |
+        Power controll for the OPTIGA Trust M. By default HIGH means power on

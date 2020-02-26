@@ -28,14 +28,14 @@ size_t cert_len = CERT_BUFFER_LEN;
 void main(void)
 {
 	LOG_INF("Hello OPTIGA");
-	dev = device_get_binding("trust-x");
+	dev = device_get_binding("trust-m");
 
 	if (dev == NULL) {
-		LOG_INF("Could not get Trust X device\n");
+		LOG_INF("Could not get Trust M device\n");
 		return;
 	}
 
-	LOG_INF("Found Trust X device");
+	LOG_INF("Found Trust M device");
 
 #if RUN_TESTS == 1
 	run_tests();
@@ -124,6 +124,9 @@ void main(void)
 
 	u8_t hash_buf[OPTRUST_SHA256_DIGEST_LEN] = {0};
 	size_t hash_buf_len = OPTRUST_SHA256_DIGEST_LEN;
+
+	/* Wait a second so OPTIGA goes to sleep */
+	k_sleep(1000);
 
 	time_stamp = k_uptime_get();
 

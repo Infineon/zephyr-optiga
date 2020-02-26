@@ -17,7 +17,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga);
 
-#define OPTIGA_STACK_SIZE (640)
+#define OPTIGA_STACK_SIZE (1024)
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
@@ -149,7 +149,7 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 
 		memcpy(handle, tmp_buf + OPTIGA_APDU_OUT_DATA_OFFSET, OPTIGA_CTX_HANDLE_LEN);
 	} else {
-		if (tmp_buf_len != 2 ||  tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS) {
+		if (tmp_buf_len != 4 ||  tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS) {
 			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
 			return -EIO;
 		}
@@ -203,6 +203,27 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	return 0;
 }
 
+/* From Trust M datasheet, table 11 */
+#define OPTIGA_STARTUP_TIME_MS 15
+
+static int optiga_power(struct device *dev, bool enable)
+{
+	const struct optiga_cfg *config = dev->config->config_info;
+	struct optiga_data *data = dev->driver_data;
+	int ret = gpio_pin_set(data->gpio, config->power_pin, enable);
+
+	if(ret != 0) {
+		return ret;
+	}
+
+	/* Wait for OPTIGA to start when turning on */
+	if (enable) {
+		k_sleep(OPTIGA_STARTUP_TIME_MS);
+	}
+
+	return 0;
+}
+
 int optiga_reset(struct device *dev)
 {
 	int err = optiga_phy_init(dev);
@@ -238,6 +259,19 @@ int optiga_init(struct device *dev)
 
 	const struct optiga_cfg *config = dev->config->config_info;
 	struct optiga_data *data = dev->driver_data;
+
+	data->gpio = device_get_binding(config->power_label);
+	if (data->gpio == NULL) {
+		LOG_ERR("Failed to get GPIO device");
+		return -EINVAL;
+	}
+
+	/* Initialize power pin */
+	gpio_pin_configure(data->gpio, config->power_pin,
+			   GPIO_OUTPUT | config->power_flags);
+
+	/* Power on OPTIGA */
+	optiga_power(dev, true);
 
 	data->reset_counter = 0;
 	data->i2c_master = device_get_binding(config->i2c_dev_name);
@@ -306,12 +340,17 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 		if (data->open) {
 			apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY_MS);
 			if (apdu == NULL) {
-				// TODO(chr): send OPTIGA to hibernate and turn of VCC
+				// TODO(chr): distinguish between Trust X and M, save handle if needed
+				optiga_close_application(dev, NULL);
+				optiga_power(dev, false);
 				continue;
 			}
 		} else {
 			apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
-			// TODO(chr): Turn on VCC and restore OPTIGA state
+			// TODO(chr): distinguish between Trust X and M
+			optiga_power(dev, true);
+			//optiga_open_application(dev, NULL);
+			optiga_reset(dev);
 		}
 
 		if (data->reset_counter > OPTIGA_MAX_RESET) {
@@ -375,19 +414,22 @@ static const struct optiga_api optiga_api_funcs = {
 #define OPTIGA_DEVICE(id)						\
 static K_THREAD_STACK_DEFINE(optiga_##id##_stack, OPTIGA_STACK_SIZE);	\
 	static const struct optiga_cfg optiga_##id##_cfg = {		\
-		.i2c_dev_name = DT_INST_##id##_INFINEON_OPTIGA_TRUST_X_BUS_NAME,	\
-		.i2c_addr     = DT_INST_##id##_INFINEON_OPTIGA_TRUST_X_BASE_ADDRESS,	\
+		.i2c_dev_name = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_BUS_NAME,	\
+		.i2c_addr     = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_BASE_ADDRESS,	\
+		.power_pin = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_POWER_GPIOS_PIN,	\
+		.power_flags = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_POWER_GPIOS_FLAGS,	\
+		.power_label = DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_POWER_GPIOS_CONTROLLER,	\
 	};								\
 									\
 static struct optiga_data optiga_##id##_data = {			\
 		.worker_stack = optiga_##id##_stack			\
 	};								\
 									\
-DEVICE_AND_API_INIT(optiga_##id, DT_INST_##id##_INFINEON_OPTIGA_TRUST_X_LABEL,	\
+DEVICE_AND_API_INIT(optiga_##id, DT_INST_##id##_INFINEON_OPTIGA_TRUST_M_LABEL,	\
 		    &optiga_init, &optiga_##id##_data,		\
 		    &optiga_##id##_cfg, POST_KERNEL,			\
 		    CONFIG_CRYPTO_INIT_PRIORITY, &optiga_api_funcs)
 
-#ifdef DT_INST_0_INFINEON_OPTIGA_TRUST_X
+#ifdef DT_INST_0_INFINEON_OPTIGA_TRUST_M
 OPTIGA_DEVICE(0);
-#endif /* DT_INST_0_INFINEON_OPTIGA_TRUST_X */
+#endif /* DT_INST_0_INFINEON_OPTIGA_TRUST_M */
