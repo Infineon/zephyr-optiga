@@ -16,6 +16,10 @@
 #include <zephyr/types.h>
 
 #define OPTIGA_STATUS_CODE_SUCCESS 0
+#define OPTIGA_MAX_SESSION_IDX 31
+
+// TODO(chr): This must match OPTIGA_IGNORE_HIBERNATE in crypto_optiga.h
+#define OPTIGA_WAKE_LOCK_IGNORED_SESSIONS 8
 
 struct optiga_apdu {
 	void *fifo_reserved;   /* 1st word reserved for use by fifo */
@@ -27,9 +31,13 @@ struct optiga_apdu {
 };
 
 typedef int (*optiga_enqueue_apdu_t)(struct device *dev, struct optiga_apdu *apdu);
+typedef u32_t (*optiga_session_acquire_t)(struct device *dev, int session_idx);
+typedef void (*optiga_session_release_t)(struct device *dev, int session_idx);
 
 struct optiga_api {
 	optiga_enqueue_apdu_t optiga_enqueue_apdu;
+	optiga_session_acquire_t optiga_session_acquire;
+	optiga_session_release_t optiga_session_release;
 };
 
 __syscall int optiga_enqueue_apdu(struct device *dev, struct optiga_apdu *apdu);
@@ -49,6 +57,27 @@ static inline bool optiga_is_driver_error(int error_code)
 static inline bool optiga_is_device_error(int error_code)
 {
 	return error_code > OPTIGA_STATUS_CODE_SUCCESS;
+}
+
+/* Acquire a token that locks a session context. It must be returned via optiga_session_release.
+ * Returns 0 if the requested token is not available
+ */
+__syscall u32_t optiga_session_acquire(struct device *dev, int session_idx);
+
+static inline u32_t z_impl_optiga_session_acquire(struct device *dev, int session_idx)
+{
+	const struct optiga_api *api = dev->driver_api;
+
+	return api->optiga_session_acquire(dev, session_idx);
+}
+
+__syscall void optiga_session_release(struct device *dev, int session_idx);
+
+static inline void z_impl_optiga_session_release(struct device *dev, int session_idx)
+{
+	const struct optiga_api *api = dev->driver_api;
+
+	return api->optiga_session_release(dev, session_idx);
 }
 
 #include <syscalls/optiga.h>

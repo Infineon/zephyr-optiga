@@ -12,6 +12,10 @@
 #include "optiga_nettran.h"
 
 #include <drivers/gpio.h>
+#include <sys/util.h>
+
+#define OPTIGA_IGNORE_HIBERNATE	8
+#define OPTIGA_IGNORE_HIBERNATE_MASK BIT_MASK(OPTIGA_IGNORE_HIBERNATE)
 
 struct optiga_data {
 	struct device *i2c_master;
@@ -23,8 +27,8 @@ struct optiga_data {
 	struct k_thread worker;
 	k_thread_stack_t *worker_stack;
 	int reset_counter;
+	atomic_t session_reservations;
 	bool open;
-
 };
 
 struct optiga_cfg {

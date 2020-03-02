@@ -339,7 +339,9 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 		struct optiga_apdu *apdu = NULL;
 		if (data->open) {
 			apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY_MS);
-			if (apdu == NULL) {
+			/* Some session contexts are saved via the "Hibernate" command, don't let them prevent shutdown */
+			bool wake_lock = atomic_get(&data->session_reservations) & ~OPTIGA_IGNORE_HIBERNATE_MASK;
+			if (apdu == NULL && !wake_lock) {
 				// TODO(chr): distinguish between Trust X and M, save handle if needed
 				optiga_close_application(dev, NULL);
 				optiga_power(dev, false);
@@ -407,8 +409,27 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 	}
 };
 
+/* Acquire a token that locks a session context. It must be returned via optiga_session_release.
+ * Returns 0 if the requested token is not available
+ */
+static u32_t session_acquire(struct device *dev, int session_idx)
+{
+	struct optiga_data *data = dev->driver_data;
+	bool acquired = !atomic_test_and_set_bit(&data->session_reservations, session_idx);
+
+	return acquired ? BIT_MASK(session_idx) : 0;
+}
+
+static void session_release(struct device *dev, int session_idx)
+{
+	struct optiga_data *data = dev->driver_data;
+	atomic_and(&data->session_reservations, 1 << session_idx);
+}
+
 static const struct optiga_api optiga_api_funcs = {
 	.optiga_enqueue_apdu = enqueue_apdu,
+	.optiga_session_acquire = session_acquire,
+	.optiga_session_release = session_release,
 };
 
 #define OPTIGA_DEVICE(id)						\
