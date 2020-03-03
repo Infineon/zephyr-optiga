@@ -125,8 +125,11 @@ void main(void)
 	u8_t hash_buf[OPTRUST_SHA256_DIGEST_LEN] = {0};
 	size_t hash_buf_len = OPTRUST_SHA256_DIGEST_LEN;
 
+	/* Acquire session to force Hibernation */
+	u32_t session = optiga_session_acquire(dev, 0);
+
 	/* Wait a second so OPTIGA goes to sleep */
-	k_sleep(1000);
+	k_sleep(6000);
 
 	time_stamp = k_uptime_get();
 
@@ -136,6 +139,9 @@ void main(void)
 
 	LOG_INF("ifx_optiga_hash_sha256_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(hash_buf, OPTRUST_SHA256_DIGEST_LEN, "Hash:");
+
+	/* Release session to do full shutdown again */
+	optiga_session_release(dev, session);
 
 	LOG_INF("Example finished");
 }

@@ -21,7 +21,7 @@ LOG_MODULE_REGISTER(optiga);
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
-#define OPTIGA_HIBERNATE_DELAY_MS 500
+#define OPTIGA_HIBERNATE_DELAY_MS 5000
 
 static void optiga_worker(void* arg1, void *arg2, void *arg3);
 
@@ -46,7 +46,32 @@ static const u8_t error_code_apdu[] =
 #define OPTIGA_OPEN_APPLICATION_LEN 20
 #define OPTIGA_RESTORE_APPLICATION_LEN 28
 #define OPTIGA_PARAM_OFFS 1
-#define OPTIGA_CTX_HANDLE_LEN 8
+/* Only least significant byte */
+#define OPTIGA_LEN_OFFS 3
+
+/* Resets the state of the stack */
+int optiga_reset(struct device *dev)
+{
+	int err = optiga_phy_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA phy layer");
+		return err;
+	}
+
+	err = optiga_data_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA data link layer");
+		return err;
+	}
+
+	err = optiga_nettran_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA nettran layer");
+		return err;
+	}
+
+	return err;
+}
 
 static const u8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
 {
@@ -68,17 +93,26 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 	/* on all error paths the application is not opened */
 	data->open = false;
 
+	/* bring the protocol stack to a known state */
+	int err = optiga_reset(dev);
+	if (err != 0) {
+		return err;
+	}
+
+	LOG_HEXDUMP_INF(handle, handle ? OPTIGA_CTX_HANDLE_LEN : 0, "Restore ctx handle:");
+
 	memcpy(tmp_buf, optiga_open_application_apdu, OPTIGA_OPEN_APPLICATION_LEN);
 
 	if (handle == NULL) {
 		tmp_buf_len = OPTIGA_OPEN_APPLICATION_LEN;
 	} else {
 		tmp_buf[OPTIGA_PARAM_OFFS] = 0x01; // TODO(chr): extract constant
+		tmp_buf[OPTIGA_LEN_OFFS] = 0x18; // TODO(chr): extract constant, Application Identifier + Context handle
 		memcpy(tmp_buf + OPTIGA_OPEN_APPLICATION_LEN, handle, OPTIGA_CTX_HANDLE_LEN);
 		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	}
 
-	int err = optiga_nettran_send_apdu(dev,	tmp_buf, tmp_buf_len);
+	err = optiga_nettran_send_apdu(dev, tmp_buf, tmp_buf_len);
 	if (err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
 		return err;
@@ -97,6 +131,9 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 
 	if(resp_len != tmp_buf_len || memcmp(tmp_buf, resp, resp_len)) {
 		LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+		u8_t error_code = 0;
+		optiga_get_error_code(dev, &error_code);
+		LOG_ERR("Error Code: %x", error_code);
 		return -EIO;
 	}
 
@@ -115,7 +152,7 @@ static const u8_t optiga_close_application_apdu[OPTIGA_CLOSE_APPLICATION_LEN] =
 
 static int optiga_close_application(struct device *dev, u8_t *handle)
 {
-	u8_t tmp_buf[OPTIGA_CTX_HANDLE_LEN] = {0};
+	u8_t tmp_buf[OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET] = {0};
 	size_t tmp_buf_len = 0;
 	struct optiga_data *data = dev->driver_data;
 
@@ -132,7 +169,7 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 		return err;
 	}
 
-	tmp_buf_len = OPTIGA_CTX_HANDLE_LEN;
+	tmp_buf_len = OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET;
 	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
@@ -143,7 +180,10 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 		if (tmp_buf_len != (OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET)
 			|| tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS)
 		{
+			u8_t error_code = 0;
+			optiga_get_error_code(dev, &error_code);
 			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+			LOG_ERR("Error Code: %x", error_code);
 			return -EIO;
 		}
 
@@ -154,6 +194,8 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 			return -EIO;
 		}
 	}
+
+	LOG_HEXDUMP_INF(handle, handle ? OPTIGA_CTX_HANDLE_LEN : 0, "Hibernate ctx handle:");
 
 	data->open = false;
 	return 0;
@@ -224,35 +266,6 @@ static int optiga_power(struct device *dev, bool enable)
 	return 0;
 }
 
-int optiga_reset(struct device *dev)
-{
-	int err = optiga_phy_init(dev);
-	if(err != 0) {
-		LOG_ERR("Failed to initialise OPTIGA phy layer");
-		return err;
-	}
-
-	err = optiga_data_init(dev);
-	if(err != 0) {
-		LOG_ERR("Failed to initialise OPTIGA data link layer");
-		return err;
-	}
-
-	err = optiga_nettran_init(dev);
-	if(err != 0) {
-		LOG_ERR("Failed to initialise OPTIGA nettran layer");
-		return err;
-	}
-
-	err = optiga_open_application(dev, NULL);
-	if(err != 0) {
-		LOG_ERR("Failed to open the OPTIGA application");
-		return err;
-	}
-
-	return err;
-}
-
 int optiga_init(struct device *dev)
 {
 	LOG_DBG("Init OPTIGA");
@@ -280,7 +293,7 @@ int optiga_init(struct device *dev)
 		return -EINVAL;
 	}
 
-	int err = optiga_reset(dev);
+	int err = optiga_open_application(dev, NULL);
 	if(err != 0) {
 		return err;
 	}
@@ -333,28 +346,35 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 {
 	struct device *dev = arg1;
 	struct optiga_data *data = dev->driver_data;
+	k_thread_name_set(k_current_get(), "OPTIGA driver");
 
 	/* execute forevever */
 	while (true) {
 		struct optiga_apdu *apdu = NULL;
+		/* Power up/down logic */
 		if (data->open) {
 			apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY_MS);
 			/* Some session contexts are saved via the "Hibernate" command, don't let them prevent shutdown */
-			bool wake_lock = atomic_get(&data->session_reservations) & ~OPTIGA_IGNORE_HIBERNATE_MASK;
+			atomic_t reservations = atomic_get(&data->session_reservations);
+			bool wake_lock = reservations & ~OPTIGA_IGNORE_HIBERNATE_MASK;
 			if (apdu == NULL && !wake_lock) {
-				// TODO(chr): distinguish between Trust X and M, save handle if needed
-				optiga_close_application(dev, NULL);
+				/* Can power down OPTIGA */
+				bool save_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
+				optiga_close_application(dev, save_ctx ? data->hibernate_handle : NULL);
 				optiga_power(dev, false);
 				continue;
 			}
 		} else {
-			apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
-			// TODO(chr): distinguish between Trust X and M
+			apdu = k_fifo_get(&data->apdu_queue,  K_FOREVER);
 			optiga_power(dev, true);
-			//optiga_open_application(dev, NULL);
-			optiga_reset(dev);
+			atomic_t reservations = atomic_get(&data->session_reservations);
+			bool restore_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
+			optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
 		}
 
+		__ASSERT(apdu != NULL, "APDU must never be NULL");
+
+		/* Stay in reset when maximum reset count reached */
 		if (data->reset_counter > OPTIGA_MAX_RESET) {
 			/* Return an error for all further requests */
 			LOG_ERR("Maximum OPTIGA reset count reached");
@@ -368,10 +388,11 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 			/* Transfer failed, try to reset the device */
 			data->reset_counter++;
 			LOG_ERR("APDU transfer failed, reseting OPTIGA, try: %d", data->reset_counter);
-			err = optiga_reset(dev);
+
+			err = optiga_open_application(dev, NULL);
 			if(err != 0) {
-				/* If reset fails, something is seriously wrong */
-				LOG_ERR("Failed to reset OPTIGA");
+				/* If OpenApplication fails, something is seriously wrong */
+				LOG_ERR("Failed to do OpenApplication");
 			}
 
 			/*
@@ -417,13 +438,13 @@ static u32_t session_acquire(struct device *dev, int session_idx)
 	struct optiga_data *data = dev->driver_data;
 	bool acquired = !atomic_test_and_set_bit(&data->session_reservations, session_idx);
 
-	return acquired ? BIT_MASK(session_idx) : 0;
+	return acquired ? BIT(session_idx) : 0;
 }
 
-static void session_release(struct device *dev, int session_idx)
+static void session_release(struct device *dev, u32_t token)
 {
 	struct optiga_data *data = dev->driver_data;
-	atomic_and(&data->session_reservations, 1 << session_idx);
+	atomic_and(&data->session_reservations, ~token);
 }
 
 static const struct optiga_api optiga_api_funcs = {

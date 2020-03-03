@@ -32,7 +32,7 @@ struct optiga_apdu {
 
 typedef int (*optiga_enqueue_apdu_t)(struct device *dev, struct optiga_apdu *apdu);
 typedef u32_t (*optiga_session_acquire_t)(struct device *dev, int session_idx);
-typedef void (*optiga_session_release_t)(struct device *dev, int session_idx);
+typedef void (*optiga_session_release_t)(struct device *dev, u32_t token);
 
 struct optiga_api {
 	optiga_enqueue_apdu_t optiga_enqueue_apdu;
@@ -71,13 +71,13 @@ static inline u32_t z_impl_optiga_session_acquire(struct device *dev, int sessio
 	return api->optiga_session_acquire(dev, session_idx);
 }
 
-__syscall void optiga_session_release(struct device *dev, int session_idx);
+__syscall void optiga_session_release(struct device *dev, u32_t token);
 
-static inline void z_impl_optiga_session_release(struct device *dev, int session_idx)
+static inline void z_impl_optiga_session_release(struct device *dev, u32_t token)
 {
 	const struct optiga_api *api = dev->driver_api;
 
-	return api->optiga_session_release(dev, session_idx);
+	return api->optiga_session_release(dev, token);
 }
 
 #include <syscalls/optiga.h>
