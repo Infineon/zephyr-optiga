@@ -73,6 +73,11 @@ int optiga_reset(struct device *dev)
 	return err;
 }
 
+static bool optiga_apdu_is_error(u8_t *apdu_start)
+{
+	return apdu_start[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS;
+}
+
 int optiga_get_error_code(struct device *dev, u8_t *err_code)
 {
 	__ASSERT(dev, "Invalid NULL pointer");
@@ -102,7 +107,7 @@ int optiga_get_error_code(struct device *dev, u8_t *err_code)
 		return -EIO;
 	}
 
-	if (tmp_buf[0] != 0) {
+	if (optiga_apdu_is_error(tmp_buf)) {
 		LOG_ERR("Failed to retrieve Error Code");
 		return -EIO;
 	}
@@ -222,7 +227,7 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 
 	if (handle != NULL) {
 		if (tmp_buf_len != (OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET)
-			|| tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS)
+			|| optiga_apdu_is_error(tmp_buf))
 		{
 			u8_t error_code = 0;
 			optiga_get_error_code(dev, &error_code);
@@ -233,7 +238,7 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 
 		memcpy(handle, tmp_buf + OPTIGA_APDU_OUT_DATA_OFFSET, OPTIGA_CTX_HANDLE_LEN);
 	} else {
-		if (tmp_buf_len != 4 ||  tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS) {
+		if (tmp_buf_len != 4 || optiga_apdu_is_error(tmp_buf)) {
 			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response3: ");
 			return -EIO;
 		}
@@ -337,9 +342,41 @@ static int optiga_transfer_apdu(struct device *dev, struct optiga_apdu *apdu)
 	return err;
 }
 
-static bool optiga_apdu_is_error(u8_t *apdu_start)
+/* Puts the OPTIGA into Hibernate mode if possible */
+static void optiga_hibernate(struct device *dev)
 {
-	return apdu_start[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS;
+	struct optiga_data *data = dev->driver_data;
+
+	/*
+	 * Session contexts in OPTIGA_IGNORE_HIBERNATE_MASK are saved via the
+	 * "Close Application" command, don't let them prevent shutdown.
+	 */
+	atomic_t reservations = atomic_get(&data->session_reservations);
+	/* Check for wake locks preventing hibernate */
+	if (reservations & ~OPTIGA_IGNORE_HIBERNATE_MASK) {
+		return;
+	}
+
+	/* Can power down OPTIGA */
+	bool save_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
+	int res = optiga_close_application(dev, save_ctx ? data->hibernate_handle : NULL);
+	if (res == 0) {
+		optiga_power(dev, false);
+	} else {
+		LOG_INF("OPTIGA not ready for Hibernate");
+	}
+}
+
+/* Wakes the OPTIGA from Hibernate mode */
+static void optiga_wakup(struct device *dev)
+{
+	struct optiga_data *data = dev->driver_data;
+
+	optiga_power(dev, true);
+	atomic_t reservations = atomic_get(&data->session_reservations);
+	bool restore_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
+	// TODO(chr): error handling
+	optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
 }
 
 static void optiga_worker(void* arg1, void *arg2, void *arg3)
@@ -351,40 +388,31 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 	/* execute forevever */
 	while (true) {
 		struct optiga_apdu *apdu = NULL;
-		/* Power up/down logic */
-		if (data->open) {
-			apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY_MS);
-			/* Some session contexts are saved via the "Hibernate" command, don't let them prevent shutdown */
-			atomic_t reservations = atomic_get(&data->session_reservations);
-			bool wake_lock = reservations & ~OPTIGA_IGNORE_HIBERNATE_MASK;
-			if (apdu == NULL && !wake_lock) {
-				/* Can power down OPTIGA */
-				bool save_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
-				int res = optiga_close_application(dev, save_ctx ? data->hibernate_handle : NULL);
-				if (res == 0) {
-					optiga_power(dev, false);
-				} else {
-					LOG_INF("OPTIGA not ready for Hibernate");
-				}
-				continue;
-			}
-		} else {
-			apdu = k_fifo_get(&data->apdu_queue,  K_FOREVER);
-			optiga_power(dev, true);
-			atomic_t reservations = atomic_get(&data->session_reservations);
-			bool restore_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
-			optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
-		}
-
-		__ASSERT(apdu != NULL, "APDU must never be NULL");
+		apdu = k_fifo_get(&data->apdu_queue, data->open ? OPTIGA_HIBERNATE_DELAY_MS : K_FOREVER);
 
 		/* Stay in reset when maximum reset count reached */
-		if (data->reset_counter > OPTIGA_MAX_RESET) {
+		if (data->reset_counter >= OPTIGA_MAX_RESET) {
+			if (data->reset_counter == OPTIGA_MAX_RESET) {
+				/* Final power down */
+				optiga_power(dev, false);
+			}
 			/* Return an error for all further requests */
 			LOG_ERR("Maximum OPTIGA reset count reached");
 			k_poll_signal_raise(&apdu->finished, -EIO);
 			continue;
 		}
+
+		if (apdu == NULL) {
+			/* Hibernate delay elapsed, try to hibernate */
+			optiga_hibernate(dev);
+			continue;
+		} else if (!data->open) {
+			/* Wake OPTIGA from hibernate to handle APDU */
+			optiga_wakup(dev);
+		}
+
+		__ASSERT(apdu != NULL, "APDU must never be NULL");
+		__ASSERT(data->open, "OPTIGA must be opened");
 
 		/* Try to send an APDU to the OPTIGA */
 		int err = optiga_transfer_apdu(dev, apdu);
