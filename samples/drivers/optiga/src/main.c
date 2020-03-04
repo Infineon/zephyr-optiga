@@ -23,7 +23,7 @@ size_t cert_len = CERT_BUFFER_LEN;
 #define DIGEST_LEN 32
 
 // set to '1' to run additional tests
-#define RUN_TESTS 1
+#define RUN_TESTS 0
 
 void main(void)
 {
@@ -125,11 +125,13 @@ void main(void)
 	u8_t hash_buf[OPTRUST_SHA256_DIGEST_LEN] = {0};
 	size_t hash_buf_len = OPTRUST_SHA256_DIGEST_LEN;
 
-	/* Acquire session to force Hibernation */
-	u32_t session = optiga_session_acquire(dev, 0);
+	/* Acquire session context to force Hibernation */
+	u16_t oid = 0;
+	res = optrust_session_acquire(&ctx, &oid);
+	LOG_INF("optrust_session_acquire res: %d", res);
 
 	/* Wait a second so OPTIGA goes to sleep */
-	k_sleep(6000);
+	k_sleep(11000);
 
 	time_stamp = k_uptime_get();
 
@@ -141,7 +143,8 @@ void main(void)
 	LOG_HEXDUMP_INF(hash_buf, OPTRUST_SHA256_DIGEST_LEN, "Hash:");
 
 	/* Release session to do full shutdown again */
-	optiga_session_release(dev, session);
+	res = optrust_session_release(&ctx, oid);
+	LOG_INF("optrust_session_release res: %d", res);
 
 	LOG_INF("Example finished");
 }

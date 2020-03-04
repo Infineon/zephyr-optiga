@@ -40,6 +40,20 @@ int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, si
 void optrust_deinit(struct optrust_ctx *ctx);
 
 /**
+ * @brief Request a session context for exclusive use
+ * @param oid Returned OID of the assigned session context
+ * @return 0 on success, error code otherwise
+ */
+int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid);
+
+/**
+ * @brief Return a session context
+ * @param oid OID of the session context to return
+ * @return 0 on success, error code otherwise
+ */
+int optrust_session_release(struct optrust_ctx *ctx, u16_t oid);
+
+/**
  * @brief Read data from a data object in the OPTIGA
  *
  * @param ctx Command context to use

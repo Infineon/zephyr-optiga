@@ -124,6 +124,48 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx)
 	return events[0].signal->result;
 }
 
+#define OPTIGA_TRUSTM_SESSIONS 4
+static const u16_t optiga_trustm_sessions[OPTIGA_TRUSTM_SESSIONS] = {
+	0xE100,
+	0xE101,
+	0xE102,
+	0xE103,
+};
+
+int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid)
+{
+	int session = 0;
+	for(; session < OPTIGA_TRUSTM_SESSIONS; session++) {
+		bool acquired = optiga_session_acquire(ctx->dev, session);
+		if(acquired) {
+			/* found free slot */
+			break;
+		}
+	}
+
+	if (session == OPTIGA_TRUSTM_SESSIONS) {
+		/* No free session contexts */
+		return -EBUSY;
+	}
+
+	*oid = optiga_trustm_sessions[session];
+	return 0;
+}
+
+int optrust_session_release(struct optrust_ctx *ctx, u16_t oid)
+{
+	int session = 0;
+	for(; session < OPTIGA_TRUSTM_SESSIONS; session++) {
+		if(oid == optiga_trustm_sessions[session]) {
+			optiga_session_release(ctx->dev, session);
+			return 0;
+		}
+	}
+
+	/* Invalid OID */
+	return -EINVAL;
+}
+
 #define OPTIGA_GET_DATA_CMD_LEN 10
 int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
 {

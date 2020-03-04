@@ -21,7 +21,7 @@ LOG_MODULE_REGISTER(optiga);
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
-#define OPTIGA_HIBERNATE_DELAY_MS 5000
+#define OPTIGA_HIBERNATE_DELAY_MS 1000
 
 static void optiga_worker(void* arg1, void *arg2, void *arg3);
 
@@ -71,6 +71,50 @@ int optiga_reset(struct device *dev)
 	}
 
 	return err;
+}
+
+int optiga_get_error_code(struct device *dev, u8_t *err_code)
+{
+	__ASSERT(dev, "Invalid NULL pointer");
+	__ASSERT(err_code, "Invalid NULL pointer");
+
+	int err = optiga_nettran_send_apdu(dev,
+		error_code_apdu,
+		sizeof(error_code_apdu));
+	if(err != 0) {
+		LOG_ERR("Failed to send Error Code APDU");
+		return err;
+	}
+
+	u8_t tmp_buf[OPTIGA_GET_ERROR_RESPONSE_LEN] = {0};
+	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
+
+
+	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (err != 0) {
+		LOG_INF("Failed to get Error Code APDU response");
+		return err;
+	}
+
+	/* Expected APDU return length is always 5 */
+	if (tmp_buf_len != OPTIGA_GET_ERROR_RESPONSE_LEN) {
+		LOG_ERR("Unexpected response length");
+		return -EIO;
+	}
+
+	if (tmp_buf[0] != 0) {
+		LOG_ERR("Failed to retrieve Error Code");
+		return -EIO;
+	}
+
+	if (tmp_buf[2] != 0x00 || tmp_buf[3] != 0x01) {
+		LOG_ERR("Unexpected data length");
+		return -EIO;
+	}
+
+	*err_code = tmp_buf[4];
+
+	return 0;
 }
 
 static const u8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
@@ -130,7 +174,7 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 	}
 
 	if(resp_len != tmp_buf_len || memcmp(tmp_buf, resp, resp_len)) {
-		LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+		LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response1: ");
 		u8_t error_code = 0;
 		optiga_get_error_code(dev, &error_code);
 		LOG_ERR("Error Code: %x", error_code);
@@ -182,15 +226,15 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 		{
 			u8_t error_code = 0;
 			optiga_get_error_code(dev, &error_code);
-			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
-			LOG_ERR("Error Code: %x", error_code);
+			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response2: ");
+			LOG_ERR("Error Code: %02x", error_code);
 			return -EIO;
 		}
 
 		memcpy(handle, tmp_buf + OPTIGA_APDU_OUT_DATA_OFFSET, OPTIGA_CTX_HANDLE_LEN);
 	} else {
 		if (tmp_buf_len != 4 ||  tmp_buf[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS) {
-			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response: ");
+			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response3: ");
 			return -EIO;
 		}
 	}
@@ -198,50 +242,6 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 	LOG_HEXDUMP_INF(handle, handle ? OPTIGA_CTX_HANDLE_LEN : 0, "Hibernate ctx handle:");
 
 	data->open = false;
-	return 0;
-}
-
-int optiga_get_error_code(struct device *dev, u8_t *err_code)
-{
-	__ASSERT(dev, "Invalid NULL pointer");
-	__ASSERT(err_code, "Invalid NULL pointer");
-
-	int err = optiga_nettran_send_apdu(dev,
-		error_code_apdu,
-		sizeof(error_code_apdu));
-	if(err != 0) {
-		LOG_ERR("Failed to send Error Code APDU");
-		return err;
-	}
-
-	u8_t tmp_buf[OPTIGA_GET_ERROR_RESPONSE_LEN] = {0};
-	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
-
-
-	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
-	if (err != 0) {
-		LOG_INF("Failed to get Error Code APDU response");
-		return err;
-	}
-
-	/* Expected APDU return length is always 5 */
-	if (tmp_buf_len != OPTIGA_GET_ERROR_RESPONSE_LEN) {
-		LOG_ERR("Unexpected response length");
-		return -EIO;
-	}
-
-	if (tmp_buf[0] != 0) {
-		LOG_ERR("Failed to retrieve Error Code");
-		return -EIO;
-	}
-
-	if (tmp_buf[2] != 0x00 || tmp_buf[3] != 0x01) {
-		LOG_ERR("Unexpected data length");
-		return -EIO;
-	}
-
-	*err_code = tmp_buf[4];
-
 	return 0;
 }
 
@@ -360,8 +360,12 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 			if (apdu == NULL && !wake_lock) {
 				/* Can power down OPTIGA */
 				bool save_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
-				optiga_close_application(dev, save_ctx ? data->hibernate_handle : NULL);
-				optiga_power(dev, false);
+				int res = optiga_close_application(dev, save_ctx ? data->hibernate_handle : NULL);
+				if (res == 0) {
+					optiga_power(dev, false);
+				} else {
+					LOG_INF("OPTIGA not ready for Hibernate");
+				}
 				continue;
 			}
 		} else {
@@ -430,21 +434,21 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 	}
 };
 
-/* Acquire a token that locks a session context. It must be returned via optiga_session_release.
- * Returns 0 if the requested token is not available
+/* Acquire a session context. It must be returned via optiga_session_release.
+ * Returns false if the requested token is not available
  */
-static u32_t session_acquire(struct device *dev, int session_idx)
+static bool session_acquire(struct device *dev, int session_idx)
 {
 	struct optiga_data *data = dev->driver_data;
 	bool acquired = !atomic_test_and_set_bit(&data->session_reservations, session_idx);
 
-	return acquired ? BIT(session_idx) : 0;
+	return acquired;
 }
 
-static void session_release(struct device *dev, u32_t token)
+static void session_release(struct device *dev, int session_idx)
 {
 	struct optiga_data *data = dev->driver_data;
-	atomic_and(&data->session_reservations, ~token);
+	atomic_clear_bit(&data->session_reservations, session_idx);
 }
 
 static const struct optiga_api optiga_api_funcs = {
