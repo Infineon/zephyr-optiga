@@ -17,7 +17,8 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga);
 
-#define OPTIGA_STACK_SIZE (1024)
+// determined by experiment
+#define OPTIGA_STACK_SIZE (512+256)
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
