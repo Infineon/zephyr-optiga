@@ -347,7 +347,7 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 	}
 
 	*len = read_len;
-	LOG_HEXDUMP_INF(data_buf, *len, "PHY read:");
+	LOG_HEXDUMP_DBG(data_buf, *len, "PHY read:");
 	return 0;
 }
 

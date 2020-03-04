@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef IFX_OPTIGA_TRUST_X_H_
-#define IFX_OPTIGA_TRUST_X_H_
+#ifndef IFX_OPTIGA_TRUST_M_H_
+#define IFX_OPTIGA_TRUST_M_H_
 
 #include <device.h>
 #include <zephyr.h>
@@ -264,55 +264,4 @@ enum OPTRUST_RNG_TYPE {
  */
 int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
 
-/**
- * @brief Compute the TLS1.2 PRF and export the result to the host
- * @param ctx Command context to use
- * @param ssec_oid OID of the shared secret
- * @param data Key derivation data
- * @param data_len Length of data
- * @param key Output buffer for the derived key
- * @param key_len Length of the derived key
- * @return 0 on success, error code otherwise
- */
-int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t ssec_oid, const u8_t *data, size_t data_len, u8_t *key, size_t key_len);
-
-/**
- * @brief Compute the TLS1.2 PRF and store the result in a data object
- * @param ctx Command context to use
- * @param ssec_oid OID of the shared secret
- * @param data Key derivation data
- * @param data_len Length of data
- * @param key_oid OID to store the key in
- * @param key_len Length of the derived key
- * @return 0 on success, error code otherwise
- */
-int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t ssec_oid, const u8_t *data, size_t data_len, u16_t key_oid, size_t key_len);
-
-/**
- * @brief Perform one way authentication, see Table 24 - One-way authentication sequence
- * @param ctx Command context to use
- * @param priv_key_oid OID of the private key to use
- * @param msg The message to authenticate
- * @param msg_len Length of msg
- * @param resp Output buffer for the response
- * @param resp_len Length of resp, contains the length of the computed response afterwards
- * @return 0 on success, error code otherwise
- */
-int optrust_auth_ecdsa_sha256(struct optrust_ctx *ctx, u16_t priv_key_oid, const u8_t *msg, size_t msg_len, u8_t *resp, size_t *resp_len);
-
-/**
- * @brief Setup a session context for DTLS
- * @param ctx Command context to use
- * @param priv_key_oid OID of the private key to use
- * @param session_oid OID of the session context to use
- * @return 0 on success, error code otherwise
- */
-int optrust_dtls_init(struct optrust_ctx *ctx, u16_t priv_key_oid, u16_t session_oid);
-
-// TODO(chr): define the API for this function
-int optrust_dtls_downlink_msg(struct optrust_ctx *ctx);
-
-// TOOD(chr): define the API for this function
-int optrust_dtls_uplink_msg(struct optrust_ctx *ctx);
-
-#endif /* IFX_OPTIGA_TRUST_X_H_ */
+#endif /* IFX_OPTIGA_TRUST_M_H_ */

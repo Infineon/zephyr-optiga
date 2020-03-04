@@ -5,7 +5,7 @@
  */
 
 #include <zephyr.h>
-#include "ifx_optiga_trust_x.h"
+#include "ifx_optiga_trust_m.h"
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <logging/log.h>
@@ -23,7 +23,7 @@ size_t cert_len = CERT_BUFFER_LEN;
 #define DIGEST_LEN 32
 
 // set to '1' to run additional tests
-#define RUN_TESTS 0
+#define RUN_TESTS 1
 
 void main(void)
 {

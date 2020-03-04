@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(test);
 #include "helpers.h"
 
 #include <drivers/crypto/optiga.h>
-#include "ifx_optiga_trust_x.h"
+#include "ifx_optiga_trust_m.h"
 
 
 /** return types of a testcase */
@@ -593,9 +593,9 @@ void run_tests()
 
 	/* Tests without Trust X/M lib */
 	failed_cnt += run_timed(test_fcs, "FCS Test");
-	failed_cnt += run_timed(phy_test, "PHY Test");
+	//failed_cnt += run_timed(phy_test, "PHY Test");
 	/* Need to reset all protocol layers because PHY Test can mess them up */
-	optiga_reset(dev);
+	//optiga_reset(dev);
 
 	failed_cnt += run_timed(set_data_object_small, "APDU Set DO small");
 	failed_cnt += run_timed(get_data_object_small, "APDU Get DO small");
