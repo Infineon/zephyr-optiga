@@ -79,7 +79,7 @@ static bool optiga_apdu_is_error(u8_t *apdu_start)
 	return apdu_start[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS;
 }
 
-int optiga_get_error_code(struct device *dev, u8_t *err_code)
+static int optiga_get_error_code(struct device *dev, u8_t *err_code)
 {
 	__ASSERT(dev, "Invalid NULL pointer");
 	__ASSERT(err_code, "Invalid NULL pointer");
@@ -181,9 +181,6 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 
 	if(resp_len != tmp_buf_len || memcmp(tmp_buf, resp, resp_len)) {
 		LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response1: ");
-		u8_t error_code = 0;
-		optiga_get_error_code(dev, &error_code);
-		LOG_ERR("Error Code: %x", error_code);
 		return -EIO;
 	}
 
@@ -227,13 +224,12 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 	}
 
 	if (handle != NULL) {
-		if (tmp_buf_len != (OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET)
-			|| optiga_apdu_is_error(tmp_buf))
+		if (tmp_buf_len == OPTIGA_APDU_OUT_DATA_OFFSET && optiga_apdu_is_error(tmp_buf)) {
+			LOG_INF("OPTIGA not ready for hibernate");
+			return -EIO;
+		} else if (tmp_buf_len != (OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET))
 		{
-			u8_t error_code = 0;
-			optiga_get_error_code(dev, &error_code);
 			LOG_HEXDUMP_ERR(tmp_buf, tmp_buf_len, "Unexpected response2: ");
-			LOG_ERR("Error Code: %02x", error_code);
 			return -EIO;
 		}
 
