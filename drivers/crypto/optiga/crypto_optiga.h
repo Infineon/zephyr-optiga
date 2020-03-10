@@ -9,6 +9,7 @@
 
 #include "optiga_phy.h"
 #include "optiga_data.h"
+#include "optiga_pre.h"
 #include "optiga_nettran.h"
 
 #include <drivers/gpio.h>
@@ -25,6 +26,7 @@ struct optiga_data {
 	struct physical_layer phy;
 	struct data_link_layer data;
 	struct nettran_layer nettran;
+	struct present_layer present;
 	struct k_fifo apdu_queue;
 	struct k_thread worker;
 	k_thread_stack_t *worker_stack;

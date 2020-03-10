@@ -26,6 +26,8 @@ enum OPTIGA_NETTRAN_PCTR_CHAIN {
 	OPTIGA_NETTRAN_PCTR_CHAIN_ERROR = 0x07
 };
 
+#define OPTIGA_NETTRAN_PCTR_PRESENT_FLAG 0x08
+
 #define OPTIGA_NETTRAN_OVERHEAD OPTIGA_NETTRAN_HEADER_LEN
 
 int optiga_nettran_init(struct device *dev) {
@@ -43,6 +45,17 @@ u8_t optiga_nettran_get_chain(u8_t *frame_start)
 	return frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & OPTIGA_NETTRAN_PCTR_CHAIN_MASK;
 }
 
+static void optiga_nettran_set_present(u8_t *frame_start, bool present)
+{
+	const u8_t tmp = present ? OPTIGA_NETTRAN_PCTR_PRESENT_FLAG : 0;
+	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] = (frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_PRESENT_FLAG) | tmp;
+}
+
+static bool optiga_nettran_get_present(u8_t *frame_start)
+{
+	return frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & OPTIGA_NETTRAN_PCTR_PRESENT_FLAG;
+}
+
 int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 {
 	__ASSERT(data, "Invalid NULL pointer");
@@ -52,6 +65,10 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	__ASSERT(max_packet_size > OPTIGA_NETTRAN_OVERHEAD, "Packet size to small");
 	size_t max_apdu_size =  max_packet_size - OPTIGA_NETTRAN_OVERHEAD;
 	packet_buf[OPTIGA_NETTRAN_PCTR_OFFSET] = 0;
+
+	struct optiga_data *driver = dev->driver_data;
+	/* Set presence flag for first packet only */
+	optiga_nettran_set_present(packet_buf, driver->nettran.presence_flag);
 	int res = 0;
 
 	/* Handle cases which fit in a single packet */
@@ -136,6 +153,11 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 	size_t max_packet_size = 0;
 	u8_t *buf = optiga_data_packet_buf(dev, &max_packet_size);
+	struct optiga_data *driver = dev->driver_data;
+
+	/* Verify presence layer status on first packet */
+	__ASSERT(optiga_nettran_get_present(buf) == driver->nettran.presence_flag,
+	"PRESENTATION layers status mismatch");
 
 	u8_t chain = optiga_nettran_get_chain(buf);
 
@@ -234,4 +256,16 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 
 	LOG_ERR("Chaining error, need to re-init");
 	return -EIO;
+}
+
+void optiga_nettran_presence_enable(struct device *dev)
+{
+	struct optiga_data *driver = dev->driver_data;
+	driver->nettran.presence_flag = true;
+}
+
+bool optiga_nettran_presence_get(struct device *dev)
+{
+	struct optiga_data *driver = dev->driver_data;
+	return driver->nettran.presence_flag;
 }

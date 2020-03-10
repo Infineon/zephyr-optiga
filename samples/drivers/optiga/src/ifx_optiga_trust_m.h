@@ -54,6 +54,19 @@ int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid);
 int optrust_session_release(struct optrust_ctx *ctx, u16_t oid);
 
 /**
+ * @brief Initialize the Trust M for shielded connection
+ * @return 0 on success, error code otherwise
+ */
+int optrust_shielded_connection_init(struct optrust_ctx *ctx, const u8_t *psk, size_t psk_len);
+
+/**
+ * @brief Enable or disable shielded connection for following commands
+ * @enable If true shielded connection is enabled, otherwise disabled
+ * @return 0 on success, error code otherwise
+ */
+int optrust_shielded_connection_enable(struct optrust_ctx *ctx, bool enable);
+
+/**
  * @brief Read data from a data object in the OPTIGA
  *
  * @param ctx Command context to use

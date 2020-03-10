@@ -14,6 +14,7 @@
 
 /* network and transport */
 struct nettran_layer {
+	bool presence_flag;
 };
 
 int optiga_nettran_init(struct device *dev);
