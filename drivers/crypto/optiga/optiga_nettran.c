@@ -31,6 +31,9 @@ enum OPTIGA_NETTRAN_PCTR_CHAIN {
 #define OPTIGA_NETTRAN_OVERHEAD OPTIGA_NETTRAN_HEADER_LEN
 
 int optiga_nettran_init(struct device *dev) {
+	struct optiga_data *driver = dev->driver_data;
+	driver->nettran.presence_flag = false;
+
 	return 0;
 }
 

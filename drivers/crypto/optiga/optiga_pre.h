@@ -11,13 +11,17 @@
 
 #include <mbedtls/ccm.h>
 
-#define OPTIGA_PRE_PRE_SHARED_SECRET_LEN 32
+#define OPTIGA_PRE_PRE_SHARED_SECRET_LEN 64
 #define OPTIGA_PRE_AES128_KEY_LEN 16
 #define OPTIGA_PRE_AES128_NONCE_LEN 8
 
 #define OPTIGA_PRE_MAC_LEN 8
+#define OPTIGA_PRE_ASSOC_DATA_LEN 8
+
 // TODO(chr): need to define appropriately or make configurable
 #define OPTIGA_PRE_MAX_APDU_SIZE 400
+
+#define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_MAC_LEN + OPTIGA_PRE_MAX_APDU_SIZE)
 
 struct present_layer {
 	// TODO(chr): need to store permanently? What on re-schedule?
@@ -27,12 +31,17 @@ struct present_layer {
 	u8_t master_dec_key[OPTIGA_PRE_AES128_KEY_LEN];
 	u8_t master_enc_nonce[OPTIGA_PRE_AES128_NONCE_LEN];
 	u8_t master_dec_nonce[OPTIGA_PRE_AES128_NONCE_LEN];
-	u8_t encrypted_apdu[OPTIGA_PRE_MAC_LEN + OPTIGA_PRE_MAX_APDU_SIZE];
+
+	u8_t encrypted_apdu[OPTIGA_PRE_MAX_ENC_APDU_LEN];
+	size_t encrypted_apdu_len;
+	u8_t assoc_data_buf[OPTIGA_PRE_ASSOC_DATA_LEN];
+
 
 	/* Context used for encrypt/decrypt of packets */
 	mbedtls_ccm_context aes_ccm_ctx;
-
-	bool enabled;
 };
+
+int optiga_pre_send_apdu(struct device *dev, const u8_t *data, size_t len);
+int optiga_pre_recv_apdu(struct device *dev, u8_t *data, size_t *len);
 
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PRE_H_ */
