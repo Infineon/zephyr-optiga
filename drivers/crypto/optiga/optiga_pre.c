@@ -91,6 +91,9 @@ enum OPTIGA_PRE_PVER {
 /* Offset of SSEQ/MSEQ in NONCE data */
 #define OPTIGA_PRE_NONCE_SEQ_OFFS 4
 
+/* Payload length of "Finish" phase of handshake */
+#define OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN (OPTIGA_PRE_RND_LEN + OPTIGA_PRE_SEQ_LEN)
+
 
 // ported from ssl_tls.c, maybe replace with export from mbedtls?
 static int tls_prf_sha256( const u8_t *secret, size_t slen,
@@ -236,7 +239,7 @@ static int optiga_pre_derive_keys(struct device *dev, const u8_t *rnd)
 
 	u8_t tmp_buf[OPTIGA_PRE_DERIVED_LEN] = {0};
 
-	int res =tls_prf_sha256(pres->pre_shared_secret, OPTIGA_PRE_PRE_SHARED_SECRET_LEN,
+	int res = tls_prf_sha256(pres->pre_shared_secret, OPTIGA_PRE_PRE_SHARED_SECRET_LEN,
 			OPTIGA_PRE_LABEL,
 			rnd, OPTIGA_PRE_RND_LEN,
 			tmp_buf, OPTIGA_PRE_DERIVED_LEN);
@@ -287,10 +290,10 @@ int optiga_pre_send_handshake_finished(struct device *dev, const u8_t *rnd, cons
 	u8_t pver = OPTIGA_PRE_PVER_PRE_SHARED;
 
 	/* Assemble associated data */
-	optiga_pre_assemble_assoc_data(dev, sctr, sseq, pver, 36);
+	optiga_pre_assemble_assoc_data(dev, sctr, sseq, pver, OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN);
 
 	/* Assemble handshake payload */
-	u8_t payload[36] = {0};
+	u8_t payload[OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN] = {0};
 	memcpy(payload, rnd, OPTIGA_PRE_RND_LEN);
 	memcpy(payload + OPTIGA_PRE_RND_LEN, sseq, OPTIGA_PRE_SEQ_LEN);
 
@@ -321,6 +324,52 @@ int optiga_pre_send_handshake_finished(struct device *dev, const u8_t *rnd, cons
 	return 0;
 }
 
+int optiga_pre_recv_handshake_finished(struct device *dev, u8_t *buf, size_t len)
+{
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	if (len != (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SEQ_LEN + OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN + OPTIGA_PRE_MAC_LEN)) {
+		/* Unexpected length */
+		return -EINVAL;
+	}
+
+	const u8_t *packet = buf;
+
+	u8_t sctr = *packet;
+	packet += OPTIGA_PRE_SCTR_LEN;
+	const u8_t *mseq = packet;
+	packet += OPTIGA_PRE_SEQ_LEN;
+	u8_t pver = OPTIGA_PRE_PVER_PRE_SHARED;
+
+	/* Assemble associated data */
+	optiga_pre_assemble_assoc_data(dev, sctr, mseq, pver, OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN);
+
+	/* Put MSEQ into master decryption nonce */
+	memcpy(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], mseq, OPTIGA_PRE_SEQ_LEN);
+
+	mbedtls_ccm_free(&pres->aes_ccm_ctx);
+	mbedtls_ccm_init(&pres->aes_ccm_ctx);
+	// TODO(chr): extract constant
+	int res = mbedtls_ccm_setkey(&pres->aes_ccm_ctx, MBEDTLS_CIPHER_ID_AES, pres->master_dec_key, 128);
+	if (res != 0) {
+		return -EINVAL;
+	}
+
+	res = mbedtls_ccm_auth_decrypt(&pres->aes_ccm_ctx, OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN,
+						pres->master_dec_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
+						pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
+						packet,
+						pres->encrypted_apdu,
+						packet + OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN, OPTIGA_PRE_MAC_LEN);
+	if (res != 0) {
+		/* decryption/authentication failure */
+		return -EINVAL;
+	}
+
+
+	return 0;
+}
 // TODO(chr): implement handshake sequence
 int optiga_pre_do_handshake(struct device *dev)
 {
@@ -378,6 +427,11 @@ int optiga_pre_do_handshake(struct device *dev)
 	/* Receive final handshake message from OPTIGA */
 	tmp_buf_len = TMP_BUF_LEN;
 	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	if (res != 0) {
+		return res;
+	}
+
+	res = optiga_pre_recv_handshake_finished(dev, tmp_buf, tmp_buf_len);
 	if (res != 0) {
 		return res;
 	}
