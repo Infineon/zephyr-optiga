@@ -6,5 +6,7 @@
         label = "trust-m";
 		/* Power control pin (D4) for Infineon MYIOT adapter board Slot 1*/
 		power-gpios = <&arduino_header 10 GPIO_ACTIVE_HIGH>;
+		/* Power control pin (GPIO1) for Infineon OPTIGA Trust M S2G on MYIOT adapter */
+		/*power-gpios = <&arduino_header 3 GPIO_ACTIVE_HIGH>;*/
     };
 };
