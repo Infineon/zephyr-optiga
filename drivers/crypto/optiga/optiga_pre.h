@@ -18,10 +18,14 @@
 #define OPTIGA_PRE_MAC_LEN 8
 #define OPTIGA_PRE_ASSOC_DATA_LEN 8
 
+#define OPTIGA_PRE_SCTR_LEN 1
+#define OPTIGA_PRE_SSEQ_LEN 4
+
+
 // TODO(chr): need to define appropriately or make configurable
 #define OPTIGA_PRE_MAX_APDU_SIZE 400
 
-#define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_MAC_LEN + OPTIGA_PRE_MAX_APDU_SIZE)
+#define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN + OPTIGA_PRE_MAX_APDU_SIZE)
 
 struct present_layer {
 	// TODO(chr): need to store permanently? What on re-schedule?

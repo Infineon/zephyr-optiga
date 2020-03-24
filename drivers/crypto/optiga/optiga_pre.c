@@ -59,7 +59,6 @@ enum OPTIGA_PRE_PVER {
 };
 
 #define OPTIGA_PRE_SCTR_OFFS 0
-#define OPTIGA_PRE_SCTR_LEN 1
 
 #define OPTIGA_PRE_PVER_OFFS (OPTIGA_PRE_SCTR_OFFS + OPTIGA_PRE_SCTR_LEN)
 #define OPTIGA_PRE_PVER_LEN 1
@@ -68,7 +67,6 @@ enum OPTIGA_PRE_PVER {
 #define OPTIGA_PRE_RND_LEN 32
 
 #define OPTIGA_PRE_SSEQ_OFFS (OPTIGA_PRE_RND_OFFS + OPTIGA_PRE_RND_LEN)
-#define OPTIGA_PRE_SSEQ_LEN 4
 
 #define OPTIGA_PRE_LABEL "Platform Binding"
 #define OPTIGA_PRE_DERIVED_LEN 40
@@ -217,7 +215,7 @@ static size_t optiga_pre_send_hello(u8_t *buf)
 	return OPTIGA_PRE_PVER_OFFS + OPTIGA_PRE_PVER_LEN;
 }
 
-static int optiga_pre_recv_hello(struct device *dev, u8_t *buf, size_t len, const u8_t **rnd)
+static int optiga_pre_recv_hello(struct device *dev, u8_t *buf, size_t len, u8_t *rnd)
 {
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
@@ -237,7 +235,8 @@ static int optiga_pre_recv_hello(struct device *dev, u8_t *buf, size_t len, cons
 		return -EINVAL;
 	}
 
-	*rnd = &buf[OPTIGA_PRE_RND_OFFS];
+	/* Keep RND value */
+	memcpy(rnd, &buf[OPTIGA_PRE_RND_OFFS], OPTIGA_PRE_RND_LEN);
 
 	/* Put SSEQ into master encryption nonce */
 	memcpy(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], &buf[OPTIGA_PRE_SSEQ_OFFS], OPTIGA_PRE_SSEQ_LEN);
@@ -287,6 +286,7 @@ void optiga_pre_assemble_assoc_data(struct device *dev, u8_t sctr, const u8_t *s
 	sys_put_be16(payload_len, assoc);
 }
 
+// TODO(chr): possible code sharing with encrypt_apdu
 int optiga_pre_send_handshake_finished(struct device *dev, const u8_t *rnd)
 {
 	struct optiga_data *data = dev->driver_data;
@@ -346,7 +346,8 @@ int optiga_pre_send_handshake_finished(struct device *dev, const u8_t *rnd)
 	return 0;
 }
 
-int optiga_pre_recv_handshake_finished(struct device *dev, u8_t *buf, size_t len)
+// TODO(chr): possible code sharing with decrypt_apdu
+int optiga_pre_recv_handshake_finished(struct device *dev, u8_t *buf, size_t len, u8_t *rnd)
 {
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
@@ -393,6 +394,27 @@ int optiga_pre_recv_handshake_finished(struct device *dev, u8_t *buf, size_t len
 	}
 
 	mbedtls_ccm_free(&pres->aes_ccm_ctx);
+
+	if (memcmp(pres->encrypted_apdu, rnd, OPTIGA_PRE_RND_LEN) != 0) {
+		/* RND value doesn't match first received value */
+		return -EINVAL;
+	}
+
+	/*
+	 * Master Encrypt Nonce and MSEQ belong togther for Record Exchange,
+	 * but atm Master Encrypt Nonce and SSEQ are concatenated in memory,
+	 * so we need to swap MSEQ and SSEQ now.
+	 * Use encrypted_apdu as temporary buffer.
+	 */
+
+	memcpy(pres->encrypted_apdu, &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], OPTIGA_PRE_SEQ_LEN);
+	memcpy(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], OPTIGA_PRE_SEQ_LEN);
+	memcpy(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], pres->encrypted_apdu, OPTIGA_PRE_SEQ_LEN);
+
+	/* Increment Sequence numbers for first exchanged message */
+	optiga_pre_seq_inc(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+	optiga_pre_seq_inc(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+
 	return 0;
 }
 // TODO(chr): implement handshake sequence
@@ -423,8 +445,8 @@ int optiga_pre_do_handshake(struct device *dev)
 	}
 
 	/* Receive RND and SSEQ */
-	const u8_t* rnd = NULL;
-	res = optiga_pre_recv_hello(dev, tmp_buf, tmp_buf_len, &rnd);
+	u8_t rnd[OPTIGA_PRE_RND_LEN] = {0};
+	res = optiga_pre_recv_hello(dev, tmp_buf, tmp_buf_len, rnd);
 	if (res != 0) {
 		return res;
 	}
@@ -454,33 +476,180 @@ int optiga_pre_do_handshake(struct device *dev)
 		return res;
 	}
 
-	res = optiga_pre_recv_handshake_finished(dev, tmp_buf, tmp_buf_len);
+	res = optiga_pre_recv_handshake_finished(dev, tmp_buf, tmp_buf_len, rnd);
 	if (res != 0) {
 		return res;
 	}
 
-	LOG_HEXDUMP_INF(tmp_buf, tmp_buf_len, "Last Handshake msg");
+	LOG_INF("Handshake finished successfully");
 
 	return 0;
 #undef TMP_BUF_LEN
 }
 
-int optiga_pre_recv_apdu(struct device *dev, u8_t *data, size_t *len)
+int optiga_pre_decrypt_apdu(struct device *dev, u8_t *buf, size_t *len)
 {
-	if (optiga_nettran_presence_get(dev)) {
-		// TODO(chr): implement
-		return -ENOTSUP;
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	if (dev == NULL || buf == NULL || len == NULL) {
+		/* Unexpected NULL parameter */
+		return -EINVAL;
+	}
+
+	if (pres->encrypted_apdu_len < (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN)) {
+		/* Unexpected length */
+		return -EINVAL;
+	}
+
+	const size_t packet_len = pres->encrypted_apdu_len - (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN);
+	if (packet_len > *len) {
+		/* Not enough memory in output buffer */
+		return -EINVAL;
+	}
+
+	const u8_t *packet = pres->encrypted_apdu;
+
+	u8_t sctr = *packet;
+	packet += OPTIGA_PRE_SCTR_LEN;
+	const u8_t *sseq = packet;
+	packet += OPTIGA_PRE_SEQ_LEN;
+	u8_t pver = OPTIGA_PRE_PVER_PRE_SHARED;
+
+	/* Assemble associated data */
+	optiga_pre_assemble_assoc_data(dev, sctr, sseq, pver, packet_len);
+
+	mbedtls_ccm_init(&pres->aes_ccm_ctx);
+	// TODO(chr): extract constant
+	int res = mbedtls_ccm_setkey(&pres->aes_ccm_ctx, MBEDTLS_CIPHER_ID_AES,
+					pres->master_dec_key,
+					OPTIGA_PRE_AES128_KEY_LEN*8);
+	if (res != 0) {
+		mbedtls_ccm_free(&pres->aes_ccm_ctx);
+		return -EINVAL;
+	}
+
+	res = mbedtls_ccm_auth_decrypt(&pres->aes_ccm_ctx, packet_len,
+						pres->master_dec_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
+						pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
+						pres->encrypted_apdu,
+						buf,
+						packet + packet_len, OPTIGA_PRE_MAC_LEN);
+	if (res != 0) {
+		/* decryption/authentication failure */
+		mbedtls_ccm_free(&pres->aes_ccm_ctx);
+		return -EINVAL;
+	}
+
+	mbedtls_ccm_free(&pres->aes_ccm_ctx);
+
+	/* Increment Sequence numbers for exchanged message */
+	optiga_pre_seq_inc(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+
+	return 0;
+}
+
+int optiga_pre_recv_apdu(struct device *dev, u8_t *apdu, size_t *len)
+{
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	const bool encrypted = optiga_nettran_presence_get(dev);
+
+	if (encrypted) {
+		pres->encrypted_apdu_len = OPTIGA_PRE_MAX_ENC_APDU_LEN;
+		int res = optiga_nettran_recv_apdu(dev, pres->encrypted_apdu, &pres->encrypted_apdu_len);
+		if (res != 0) {
+			return res;
+		}
+
+		return optiga_pre_decrypt_apdu(dev, apdu, len);
 	} else {
-		return optiga_nettran_recv_apdu(dev, data, len);
+		return optiga_nettran_recv_apdu(dev, apdu, len);
 	}
 }
 
-int optiga_pre_send_apdu(struct device *dev, const u8_t *data, size_t len)
+int optiga_pres_encrypt_apdu(struct device *dev, const u8_t *apdu, size_t len)
 {
-	if (optiga_nettran_presence_get(dev)) {
-		// TODO(chr): implement
-		return -ENOTSUP;
-	} else {
-		return optiga_nettran_send_apdu(dev, data, len);
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	if (len > UINT16_MAX) {
+		return -EINVAL;
 	}
+
+	if (len > OPTIGA_PRE_MAX_APDU_SIZE) {
+		return -EINVAL;
+	}
+
+	const u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+
+	mbedtls_ccm_init(&pres->aes_ccm_ctx);
+
+	int res = mbedtls_ccm_setkey(&pres->aes_ccm_ctx,
+					MBEDTLS_CIPHER_ID_AES,
+					pres->master_enc_key,
+					OPTIGA_PRE_AES128_KEY_LEN*8);
+	if (res != 0) {
+		mbedtls_ccm_free(&pres->aes_ccm_ctx);
+		return -EINVAL;
+	}
+
+	u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_REC_EXCHG | OPTIGA_PRE_SCTR_PROTECTION_MASTER | OPTIGA_PRE_SCTR_PROTECTION_SLAVE;
+	u8_t pver = OPTIGA_PRE_PVER_PRE_SHARED;
+
+	/* Assemble associated data */
+	optiga_pre_assemble_assoc_data(dev, sctr, mseq, pver, len);
+
+	/* Assemble final packet header*/
+	u8_t *packet = pres->encrypted_apdu;
+
+	*packet = sctr;
+	packet += OPTIGA_PRE_SCTR_LEN;
+
+	memcpy(packet, mseq, OPTIGA_PRE_SEQ_LEN);
+	packet += OPTIGA_PRE_SEQ_LEN;
+
+
+	/* encrypt payload */
+	res = mbedtls_ccm_encrypt_and_tag(&pres->aes_ccm_ctx, len,
+					pres->master_enc_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
+					pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
+					apdu,
+					packet,
+					packet + len, OPTIGA_PRE_MAC_LEN);
+
+	if(res != 0) {
+		mbedtls_ccm_free(&pres->aes_ccm_ctx);
+		return -EINVAL;
+	}
+
+	packet += len + OPTIGA_PRE_MAC_LEN;
+	pres->encrypted_apdu_len = packet - pres->encrypted_apdu;
+	mbedtls_ccm_free(&pres->aes_ccm_ctx);
+
+	optiga_pre_seq_inc(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+	return 0;
+}
+
+int optiga_pre_send_apdu(struct device *dev, const u8_t *apdu, size_t len)
+{
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	const u8_t *send_data = apdu;
+	const size_t *send_len = &len;
+
+	if (optiga_nettran_presence_get(dev)) {
+		int res = optiga_pres_encrypt_apdu(dev, apdu, len);
+		if (res != 0) {
+			/* Error during encryption */
+			return res;
+		}
+
+		send_data = pres->encrypted_apdu;
+		send_len = &pres->encrypted_apdu_len;
+	}
+
+	return optiga_nettran_send_apdu(dev, send_data, *send_len);
 }
