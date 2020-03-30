@@ -11,7 +11,6 @@
 #include <drivers/crypto/optiga.h>
 
 #include "crypto_optiga.h"
-#include "optiga_phy.h"
 
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
@@ -71,6 +70,12 @@ int optiga_reset(struct device *dev)
 		return err;
 	}
 
+	err = optiga_pre_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA presentation layer");
+		return err;
+	}
+
 	return err;
 }
 
@@ -84,7 +89,7 @@ static int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	__ASSERT(dev, "Invalid NULL pointer");
 	__ASSERT(err_code, "Invalid NULL pointer");
 
-	int err = optiga_nettran_send_apdu(dev,
+	int err = optiga_pre_send_apdu(dev,
 		error_code_apdu,
 		sizeof(error_code_apdu));
 	if(err != 0) {
@@ -96,7 +101,7 @@ static int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
 
 
-	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	err = optiga_pre_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get Error Code APDU response");
 		return err;
@@ -162,7 +167,7 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	}
 
-	err = optiga_nettran_send_apdu(dev, tmp_buf, tmp_buf_len);
+	err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
 	if (err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
 		return err;
@@ -173,7 +178,7 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 	static const size_t resp_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
 	tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
-	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	err = optiga_pre_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
 		return err;
@@ -210,14 +215,14 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 		tmp_buf[OPTIGA_PARAM_OFFS] = 0x01; // TODO(chr): extract constant
 	}
 
-	int err = optiga_nettran_send_apdu(dev,	tmp_buf, tmp_buf_len);
+	int err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
 	if(err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
 		return err;
 	}
 
 	tmp_buf_len = OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET;
-	err = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	err = optiga_pre_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
 		return err;
@@ -324,13 +329,13 @@ static int enqueue_apdu(struct device *dev, struct optiga_apdu *apdu)
 
 static int optiga_transfer_apdu(struct device *dev, struct optiga_apdu *apdu)
 {
-	int err = optiga_nettran_send_apdu(dev,	apdu->tx_buf, apdu->tx_len);
+	int err = optiga_pre_send_apdu(dev,	apdu->tx_buf, apdu->tx_len);
 	if(err != 0) {
 		LOG_ERR("Failed to send APDU");
 		return err;
 	}
 
-	err = optiga_nettran_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
+	err = optiga_pre_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
 	if (err != 0) {
 		LOG_ERR("Failed to receive APDU");
 		return err;

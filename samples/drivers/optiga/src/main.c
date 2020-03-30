@@ -25,6 +25,9 @@ size_t cert_len = CERT_BUFFER_LEN;
 // set to '1' to run additional tests
 #define RUN_TESTS 0
 
+// set to '1' to run shielded connection tests
+#define SC_TEST 1
+
 void main(void)
 {
 	LOG_INF("Hello OPTIGA");
@@ -50,7 +53,7 @@ void main(void)
 	s32_t milliseconds_spent = k_uptime_delta(&time_stamp);
 
 	LOG_INF("ifx_optiga_trust_init res: %d, took %d ms", res, milliseconds_spent);
-
+#if SC_TEST == 1
 
 	static const u8_t psk[64] = {
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
@@ -73,7 +76,17 @@ void main(void)
 
 	optiga_pre_do_handshake(dev);
 
-	return;
+	/* read co-processor UID */
+	cert_len = CERT_BUFFER_LEN;
+
+	time_stamp = k_uptime_get();
+	res = optrust_data_get(&ctx, 0xE0C2, 0, cert_buf, &cert_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("ifx_optiga_data_get res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(cert_buf, cert_len, "Co-processor UID:");
+
+#endif
 
 	/* read device certificate */
 	cert_len = CERT_BUFFER_LEN;

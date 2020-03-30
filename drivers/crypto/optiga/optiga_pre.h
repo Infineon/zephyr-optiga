@@ -23,7 +23,7 @@
 
 
 // TODO(chr): need to define appropriately or make configurable
-#define OPTIGA_PRE_MAX_APDU_SIZE 400
+#define OPTIGA_PRE_MAX_APDU_SIZE 1400
 
 #define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN + OPTIGA_PRE_MAX_APDU_SIZE)
 
@@ -43,7 +43,7 @@ struct present_layer {
 	/* Context used for encrypt/decrypt of packets */
 	mbedtls_ccm_context aes_ccm_ctx;
 };
-
+int optiga_pre_init(struct device *dev);
 int optiga_pre_send_apdu(struct device *dev, const u8_t *data, size_t len);
 int optiga_pre_recv_apdu(struct device *dev, u8_t *data, size_t *len);
 
