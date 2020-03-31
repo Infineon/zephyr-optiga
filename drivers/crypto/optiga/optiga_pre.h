@@ -39,6 +39,7 @@ struct present_layer {
 	u8_t encrypted_apdu[OPTIGA_PRE_MAX_ENC_APDU_LEN];
 	size_t encrypted_apdu_len;
 	u8_t assoc_data_buf[OPTIGA_PRE_ASSOC_DATA_LEN];
+	u8_t pver;
 
 	/* Context used for encrypt/decrypt of packets */
 	mbedtls_ccm_context aes_ccm_ctx;
