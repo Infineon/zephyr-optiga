@@ -587,3 +587,60 @@ int optiga_pre_send_apdu(struct device *dev, const u8_t *apdu, size_t len)
 
 	return optiga_nettran_send_apdu(dev, send_data, *send_len);
 }
+
+int optiga_pre_save_ctx(struct device *dev)
+{
+	struct optiga_data *data = dev->driver_data;
+
+	u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_SAVE;
+	int res = optiga_nettran_send_apdu(dev, &sctr, 1);
+	if (res != 0) {
+		return res;
+	}
+
+	size_t response_len = 1;
+	res = optiga_nettran_recv_apdu(dev, &sctr, &response_len);
+
+	if (sctr != (OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_SAVED)) {
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int optiga_pre_restore_ctx(struct device *dev)
+{
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	u8_t packet_buf[5] = {0};
+
+	u8_t *packet = packet_buf;
+
+	*packet = OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_RESTORE;
+	packet += OPTIGA_PRE_SCTR_LEN;
+
+	memcpy(packet, &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], OPTIGA_PRE_SEQ_LEN);
+	int res = optiga_nettran_send_apdu(dev, packet_buf, 5);
+	if (res != 0) {
+		return res;
+	}
+
+	size_t response_len = 5;
+	res = optiga_nettran_recv_apdu(dev, packet_buf, &response_len);
+	packet = packet_buf;
+
+	if (*packet != (OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_RESTORED)) {
+		/* Unexpected response */
+		return -EIO;
+	}
+
+	packet += OPTIGA_PRE_SCTR_LEN;
+
+	if (memcmp(packet, &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], OPTIGA_PRE_SEQ_LEN) != 0) {
+		/* Unexpected sequence number */
+		return -EIO;
+	}
+
+	return 0;
+}
