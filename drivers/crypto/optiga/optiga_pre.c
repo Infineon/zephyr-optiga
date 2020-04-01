@@ -176,12 +176,26 @@ static void optiga_pre_seq_inc(u8_t *seq)
 	sys_put_be32(tmp, seq);
 }
 
+void optiga_pre_clear_keys(struct present_layer *pres)
+{
+	// TODO(chr): use cryptographic memzero?
+	memset(pres->master_enc_key, 0, OPTIGA_PRE_AES128_KEY_LEN);
+	memset(pres->master_dec_key, 0, OPTIGA_PRE_AES128_KEY_LEN);
+	memset(pres->master_enc_nonce, 0, OPTIGA_PRE_AES128_NONCE_LEN);
+	memset(pres->master_dec_nonce, 0, OPTIGA_PRE_AES128_NONCE_LEN);
+	memset(pres->encrypted_apdu, 0, OPTIGA_PRE_MAX_ENC_APDU_LEN);
+}
+
 int optiga_pre_init(struct device *dev) {
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	optiga_pre_clear_keys(pres);
 	return 0;
 }
 
 /*
- * @brief Sets the shared secrect and derives session keys
+ * @brief Sets the shared secrect
  * @param dev Device to operate on
  * @param ssec Pointer to shared secret, NULL invalidates all session data
  * @param ssec_len Length of ssec, 0 invalidates all session data
@@ -191,12 +205,7 @@ int optiga_pre_set_shared_secret(struct device *dev, const u8_t *ssec, size_t ss
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
 	if (ssec == NULL || ssec_len == 0) {
-		memset(pres->pre_shared_secret, 0, OPTIGA_PRE_PRE_SHARED_SECRET_LEN);
-		memset(pres->master_enc_key, 0, OPTIGA_PRE_AES128_KEY_LEN);
-		memset(pres->master_dec_key, 0, OPTIGA_PRE_AES128_KEY_LEN);
-		memset(pres->master_enc_nonce, 0, OPTIGA_PRE_AES128_NONCE_LEN);
-		memset(pres->master_dec_nonce, 0, OPTIGA_PRE_AES128_NONCE_LEN);
-		memset(pres->encrypted_apdu, 0, OPTIGA_PRE_MAX_ENC_APDU_LEN);
+		optiga_pre_clear_keys(pres);
 	} else {
 		if (ssec_len != OPTIGA_PRE_PRE_SHARED_SECRET_LEN) {
 			/* Invalid shared secret */
@@ -449,10 +458,6 @@ int optiga_pre_do_handshake(struct device *dev)
 {
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
-#define TMP_BUF_LEN 49
-	/* Maximum message length is 49 */
-	u8_t tmp_buf[TMP_BUF_LEN] = {0};
-	size_t tmp_buf_len = TMP_BUF_LEN;
 
 	/* Enable Presentation layer in NETTRAN */
 	optiga_nettran_presence_enable(dev);
@@ -461,60 +466,68 @@ int optiga_pre_do_handshake(struct device *dev)
 	pres->pver = OPTIGA_PRE_PVER_PRE_SHARED;
 
 	/* First step: request RND and SSEQ */
-	tmp_buf_len = optiga_pre_send_hello(tmp_buf);
+	pres->encrypted_apdu_len = optiga_pre_send_hello(pres->encrypted_apdu);
 
-	int res = optiga_nettran_send_apdu(dev, tmp_buf, tmp_buf_len);
+	int res = optiga_nettran_send_apdu(dev, pres->encrypted_apdu, pres->encrypted_apdu_len);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
-	tmp_buf_len = TMP_BUF_LEN;
-	res = optiga_nettran_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	pres->encrypted_apdu_len = OPTIGA_PRE_MAX_ENC_APDU_LEN;
+	res = optiga_nettran_recv_apdu(dev, pres->encrypted_apdu, &pres->encrypted_apdu_len);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
 	/* Receive RND and SSEQ */
 	u8_t rnd[OPTIGA_PRE_RND_LEN] = {0};
-	res = optiga_pre_recv_hello(dev, tmp_buf, tmp_buf_len, rnd);
+	res = optiga_pre_recv_hello(dev, pres->encrypted_apdu, pres->encrypted_apdu_len, rnd);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
 	/* Derive master and slave encrypt/decrypt keys */
 	res = optiga_pre_derive_keys(dev, rnd);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
 	/* Prepare final handshake message */
 	res = optiga_pre_send_handshake_finished(pres, rnd);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
 	/* send to OPTIGA */
 	res = optiga_nettran_send_apdu(dev, pres->encrypted_apdu, pres->encrypted_apdu_len);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
 	/* Receive final handshake message from OPTIGA */
 	pres->encrypted_apdu_len = OPTIGA_PRE_MAX_ENC_APDU_LEN;
 	res = optiga_nettran_recv_apdu(dev, pres->encrypted_apdu, &pres->encrypted_apdu_len);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
-	tmp_buf_len = TMP_BUF_LEN;
+#define TMP_BUF_LEN 49
+	/* Maximum message length is 49 */
+	u8_t tmp_buf[TMP_BUF_LEN] = {0};
+	size_t tmp_buf_len = TMP_BUF_LEN;
 	res = optiga_pre_recv_handshake_finished(pres, tmp_buf, &tmp_buf_len, rnd);
 	if (res != 0) {
-		return res;
+		goto cleanup;
 	}
 
 	LOG_INF("Handshake finished successfully");
 
 	return 0;
+
+	/* Remove all generated crypographic keys */
+	cleanup:
+		optiga_pre_clear_keys(pres);
+		return res;
 #undef TMP_BUF_LEN
 }
 
@@ -590,7 +603,10 @@ int optiga_pre_send_apdu(struct device *dev, const u8_t *apdu, size_t len)
 
 int optiga_pre_save_ctx(struct device *dev)
 {
-	struct optiga_data *data = dev->driver_data;
+	if (!optiga_nettran_presence_get(dev)) {
+		LOG_INF("Shield not active");
+		return 0;
+	}
 
 	u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_SAVE;
 	int res = optiga_nettran_send_apdu(dev, &sctr, 1);
@@ -613,8 +629,9 @@ int optiga_pre_restore_ctx(struct device *dev)
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
 
-	u8_t packet_buf[5] = {0};
+	__ASSERT(optiga_nettran_presence_get(dev), "Shield must be active");
 
+	u8_t packet_buf[5] = {0};
 	u8_t *packet = packet_buf;
 
 	*packet = OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_RESTORE;

@@ -481,10 +481,16 @@ static void session_release(struct device *dev, int session_idx)
 	atomic_clear_bit(&data->session_reservations, session_idx);
 }
 
+static int start_shield(struct device *dev, const u8_t *key, size_t key_len)
+{
+	return 0;
+}
+
 static const struct optiga_api optiga_api_funcs = {
 	.optiga_enqueue_apdu = enqueue_apdu,
 	.optiga_session_acquire = session_acquire,
 	.optiga_session_release = session_release,
+	.optiga_start_shield = start_shield,
 };
 
 #define OPTIGA_DEVICE(id)						\
