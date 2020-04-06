@@ -68,13 +68,11 @@ void main(void)
 
 	LOG_INF("set platform binding secret res: %d, took %d ms", res, milliseconds_spent);
 
-	res = optiga_pre_set_shared_secret(dev, psk, 64);
-	LOG_INF("optiga_pre_set_shared_secret res: %d, took %d ms", res, 0);
-
 	/* Force staying awake */
 	optiga_session_acquire(dev, 30);
 
-	optiga_pre_do_handshake(dev);
+	res = optiga_start_shield(dev, psk, 64);
+	LOG_INF("optiga_start_shield res: %d, took %d ms", res, 0);
 
 	/* read co-processor UID */
 	cert_len = CERT_BUFFER_LEN;

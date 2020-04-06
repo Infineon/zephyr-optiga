@@ -32,6 +32,7 @@ struct optiga_data {
 	k_thread_stack_t *worker_stack;
 	int reset_counter;
 	atomic_t session_reservations;
+	atomic_t shield_state;
 	u8_t hibernate_handle[OPTIGA_CTX_HANDLE_LEN];
 	bool open;
 };

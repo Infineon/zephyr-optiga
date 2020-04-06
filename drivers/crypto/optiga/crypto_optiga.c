@@ -16,12 +16,22 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga);
 
+#define OPTIGA_SHIELD_STACK_ADDITION (128 + 64)
+
 // determined by experiment
-#define OPTIGA_STACK_SIZE (512+256)
+#define OPTIGA_STACK_SIZE (512+256 + OPTIGA_SHIELD_STACK_ADDITION)
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
 #define OPTIGA_HIBERNATE_DELAY_MS 1000
+
+enum OPTIGA_SHIELD_STATE {
+	OPTIGA_SHIELD_DISABLED = 0,
+	OPTIGA_SHIELD_LOADING_KEY,
+	OPTIGA_SHIELD_KEY_LOADED,
+	OPTIGA_SHIELD_HANDSHAKE,
+	OPTIGA_SHIELD_ENABLED,
+};
 
 static void optiga_worker(void* arg1, void *arg2, void *arg3);
 
@@ -305,6 +315,8 @@ int optiga_init(struct device *dev)
 		return err;
 	}
 
+	atomic_set(&data->shield_state, OPTIGA_SHIELD_DISABLED);
+
 	k_fifo_init(&data->apdu_queue);
 
 	k_thread_create(&data->worker, data->worker_stack,
@@ -413,11 +425,27 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 			optiga_wakup(dev);
 		}
 
+		int err = 0;
+		/* Check if we need to execute the handshake for shielded connection*/
+		if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_HANDSHAKE)) {
+			err = optiga_pre_do_handshake(dev);
+			if (err == 0) {
+				LOG_INF("Shielded Connection enabled");
+				atomic_set(&data->shield_state, OPTIGA_SHIELD_ENABLED);
+			} else {
+				LOG_ERR("Handshake failed: %d", err);
+				atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+			}
+		}
+
 		__ASSERT(apdu != NULL, "APDU must never be NULL");
 		__ASSERT(data->open, "OPTIGA must be opened");
 
 		/* Try to send an APDU to the OPTIGA */
-		int err = optiga_transfer_apdu(dev, apdu);
+		if (err == 0) {
+			err = optiga_transfer_apdu(dev, apdu);
+		}
+
 		if (err != 0) {
 			/* Transfer failed, try to reset the device */
 			data->reset_counter++;
@@ -437,6 +465,9 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 				k_poll_signal_raise(&apdu->finished, -EIO);
 				apdu = k_fifo_get(&data->apdu_queue, K_NO_WAIT);
 			}
+
+			/* If shielded connection was enabled, we need to re-handshake*/
+			atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED);
 
 			continue;
 		} else {
@@ -483,7 +514,24 @@ static void session_release(struct device *dev, int session_idx)
 
 static int start_shield(struct device *dev, const u8_t *key, size_t key_len)
 {
-	return 0;
+	struct optiga_data *data = dev->driver_data;
+	if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_DISABLED, OPTIGA_SHIELD_LOADING_KEY)
+		|| atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_LOADING_KEY)) {
+		int res = optiga_pre_set_shared_secret(dev, key, key_len);
+		if (res != 0) {
+			/* Can only happen with invalid key */
+			LOG_ERR("Failed to set key: %d", res);
+			// TODO(chr): don't just turn of shielded connection on error
+			atomic_set(&data->shield_state, OPTIGA_SHIELD_DISABLED);
+			return res;
+		}
+
+		atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+		return 0;
+	}
+
+	// TODO(chr): better error code
+	return -EBUSY;
 }
 
 static const struct optiga_api optiga_api_funcs = {

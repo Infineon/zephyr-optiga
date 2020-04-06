@@ -45,6 +45,8 @@ struct present_layer {
 	mbedtls_ccm_context aes_ccm_ctx;
 };
 int optiga_pre_init(struct device *dev);
+int optiga_pre_set_shared_secret(struct device *dev, const u8_t *ssec, size_t ssec_len);
+int optiga_pre_do_handshake(struct device *dev);
 int optiga_pre_send_apdu(struct device *dev, const u8_t *data, size_t len);
 int optiga_pre_recv_apdu(struct device *dev, u8_t *data, size_t *len);
 
