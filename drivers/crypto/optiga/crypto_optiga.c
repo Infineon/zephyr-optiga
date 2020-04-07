@@ -393,106 +393,179 @@ static void optiga_wakup(struct device *dev)
 	optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
 }
 
+enum WORKER_STATE {
+	WORKER_IDLE,
+	WORKER_HIBERNATE,
+	WORKER_PROCESS_APDU,
+	WORKER_RESET,
+	WORKER_RESET_LOCK,
+};
+
 static void optiga_worker(void* arg1, void *arg2, void *arg3)
 {
 	struct device *dev = arg1;
 	struct optiga_data *data = dev->driver_data;
 	k_thread_name_set(k_current_get(), "OPTIGA driver");
+	enum WORKER_STATE state = WORKER_IDLE;
+	struct optiga_apdu *apdu = NULL;
+	int err = 0;
 
 	/* execute forevever */
 	while (true) {
-		struct optiga_apdu *apdu = NULL;
-		apdu = k_fifo_get(&data->apdu_queue, data->open ? OPTIGA_HIBERNATE_DELAY_MS : K_FOREVER);
+		switch(state) {
+			case WORKER_IDLE:
+				apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY_MS);
+				if (apdu == NULL) {
+					/* Hibernate delay elapsed, try to hibernate */
+					state = WORKER_HIBERNATE;
+				} else {
+					/* Process the APDU */
+					state = WORKER_PROCESS_APDU;
+				}
+				break;
+			case WORKER_HIBERNATE:
+				/* Try to hibernate */
+				optiga_hibernate(dev);
 
-		/* Stay in reset when maximum reset count reached */
-		if (data->reset_counter >= OPTIGA_MAX_RESET) {
-			if (data->reset_counter == OPTIGA_MAX_RESET) {
-				/* Final power down */
-				optiga_power(dev, false);
-			}
-			/* Return an error for all further requests */
-			LOG_ERR("Maximum OPTIGA reset count reached");
-			k_poll_signal_raise(&apdu->finished, -EIO);
-			continue;
-		}
+				if (data->open) {
+					/* Couldn't hibernate, try again later */
+					state = WORKER_IDLE;
+					break;
+				}
 
-		if (apdu == NULL) {
-			/* Hibernate delay elapsed, try to hibernate */
-			optiga_hibernate(dev);
-			continue;
-		} else if (!data->open) {
-			/* Wake OPTIGA from hibernate to handle APDU */
-			optiga_wakup(dev);
-		}
+				/* Wait for new APDUs */
+				apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
 
-		int err = 0;
-		/* Check if we need to execute the handshake for shielded connection*/
-		if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_HANDSHAKE)) {
-			err = optiga_pre_do_handshake(dev);
-			if (err == 0) {
-				LOG_INF("Shielded Connection enabled");
-				atomic_set(&data->shield_state, OPTIGA_SHIELD_ENABLED);
-			} else {
-				LOG_ERR("Handshake failed: %d", err);
-				atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
-			}
-		}
+				/* Wake OPTIGA from hibernate to handle APDU */
+				optiga_wakup(dev);
 
-		__ASSERT(apdu != NULL, "APDU must never be NULL");
-		__ASSERT(data->open, "OPTIGA must be opened");
+				if (!data->open) {
+					/* Signal error to users and mark APDU as handled */
+					k_poll_signal_raise(&apdu->finished, err);
+					apdu = NULL;
 
-		/* Try to send an APDU to the OPTIGA */
-		if (err == 0) {
-			err = optiga_transfer_apdu(dev, apdu);
-		}
+					/* Couldn't wake OPTIGA, try reset */
+					state = WORKER_RESET;
+					break;
+				}
 
-		if (err != 0) {
-			/* Transfer failed, try to reset the device */
-			data->reset_counter++;
-			LOG_ERR("APDU transfer failed, reseting OPTIGA, try: %d", data->reset_counter);
+				/* Successfull wakup, if a problem existed it's solved now */
+				data->reset_counter = 0;
+				state = WORKER_PROCESS_APDU;
+				break;
+			case WORKER_PROCESS_APDU:
+				__ASSERT(apdu != NULL, "APDU must never be NULL");
+				__ASSERT(data->open, "OPTIGA must be opened");
 
-			err = optiga_open_application(dev, NULL);
-			if(err != 0) {
-				/* If OpenApplication fails, something is seriously wrong */
-				LOG_ERR("Failed to do OpenApplication");
-			}
+				/* Check if we need to execute the handshake for shielded connection*/
+				if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_HANDSHAKE)) {
+					err = optiga_pre_do_handshake(dev);
+					if (err == 0) {
+						LOG_INF("Shielded Connection enabled");
+						atomic_set(&data->shield_state, OPTIGA_SHIELD_ENABLED);
+					} else {
+						LOG_ERR("Handshake failed: %d", err);
+						atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
 
-			/*
-			 * After a reset we need to invalidate all commands in the queue,
-			 * because they might use a session context, which is cleared on reset
-			 */
-			while(apdu != NULL) {
+						/* Signal error to users and mark APDU as handled */
+						k_poll_signal_raise(&apdu->finished, -EIO);
+						apdu = NULL;
+
+						/* Need to clear out APDUs that rely on encryption being present */
+						state = WORKER_RESET;
+						break;
+					}
+				}
+
+				/* Try to send an APDU to the OPTIGA */
+				err = optiga_transfer_apdu(dev, apdu);
+
+				if (err != 0) {
+					/* Forward error to users and mark APDU as handled */
+					k_poll_signal_raise(&apdu->finished, err);
+					apdu = NULL;
+
+					/* Transfer failed, try to reset the device */
+					state = WORKER_RESET;
+					break;
+				} else {
+					/* Successfull transfer, if a problem existed it's solved now */
+					data->reset_counter = 0;
+				}
+
+				/* Check if APDU signals an error and retrieve it */
+				__ASSERT(apdu->rx_len > 0, "Not enough bytes in APDU");
+				if(optiga_apdu_is_error(apdu->rx_buf)) {
+					u8_t optiga_err_code = 0;
+					err = optiga_get_error_code(dev, &optiga_err_code);
+					if (err != 0) {
+						LOG_ERR("Failed to receive Error Code: %d", err);
+
+						/* Forward error to users and mark APDU as handled */
+						k_poll_signal_raise(&apdu->finished, err);
+						apdu = NULL;
+
+						/* Transfer failed, try to reset the device */
+						state = WORKER_RESET;
+						break;
+					}
+
+					/* Forward OPTIGA error code to users, mark APDU as handled */
+					k_poll_signal_raise(&apdu->finished, optiga_err_code);
+					apdu = NULL;
+					break;
+				}
+
+				/* APDU transferred without error, mark as handled */
+				k_poll_signal_raise(&apdu->finished, OPTIGA_STATUS_CODE_SUCCESS);
+				apdu = NULL;
+
+				state = WORKER_IDLE;
+				break;
+			case WORKER_RESET:
+				__ASSERT(apdu == NULL, "APDU must be marked as handled");
+
+				data->reset_counter++;
+
+				if (data->reset_counter == OPTIGA_MAX_RESET) {
+					/* Final power down */
+					LOG_ERR("Maximum reset count reached, turning off");
+					optiga_power(dev, false);
+					state = WORKER_RESET_LOCK;
+					break;
+				}
+
+				LOG_ERR("Reseting OPTIGA, try: %d", data->reset_counter);
+				err = optiga_open_application(dev, NULL);
+				if(err != 0) {
+					/* If OpenApplication fails, something is seriously wrong */
+					LOG_ERR("Failed to do OpenApplication");
+				}
+
+				/*
+				 * After a reset we need to invalidate all commands in the queue,
+				 * because they might use a session context, which is cleared on reset
+				 */
+				while((apdu = k_fifo_get(&data->apdu_queue, K_NO_WAIT)) != NULL) {
+					k_poll_signal_raise(&apdu->finished, -EIO);
+
+				}
+
+				/* If shielded connection was enabled, we need to re-handshake*/
+				atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED);
+				break;
+			case WORKER_RESET_LOCK:
+				/* Wait for new APDUs */
+				apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
+
+				/* Signal error to user */
 				k_poll_signal_raise(&apdu->finished, -EIO);
-				apdu = k_fifo_get(&data->apdu_queue, K_NO_WAIT);
-			}
 
-			/* If shielded connection was enabled, we need to re-handshake*/
-			atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED);
-
-			continue;
-		} else {
-			/* Successfull transfer, if a problem existed it's solved now */
-			data->reset_counter = 0;
+				/* This state is a permanent dead end until re-initialization of the driver */
+				break;
 		}
-
-		/* Check if an error occured and retrieve it */
-		__ASSERT(apdu->rx_len > 0, "Not enough bytes in APDU");
-		bool apdu_error = optiga_apdu_is_error(apdu->rx_buf);
-		if(apdu_error) {
-			u8_t optiga_err_code = 0;
-			err = optiga_get_error_code(dev, &optiga_err_code);
-			if (err != 0) {
-				LOG_ERR("Failed to receive Error Code");
-				k_poll_signal_raise(&apdu->finished, err);
-				continue;
-			}
-
-			k_poll_signal_raise(&apdu->finished, optiga_err_code);
-			continue;
-		}
-
-		k_poll_signal_raise(&apdu->finished, OPTIGA_STATUS_CODE_SUCCESS);
 	}
+
 };
 
 /* Acquire a session context. It must be returned via optiga_session_release.
