@@ -158,12 +158,6 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 	/* on all error paths the application is not opened */
 	data->open = false;
 
-	/* bring the protocol stack to a known state */
-	int err = optiga_reset(dev);
-	if (err != 0) {
-		return err;
-	}
-
 	LOG_HEXDUMP_INF(handle, handle ? OPTIGA_CTX_HANDLE_LEN : 0, "Restore ctx handle:");
 
 	memcpy(tmp_buf, optiga_open_application_apdu, OPTIGA_OPEN_APPLICATION_LEN);
@@ -177,7 +171,7 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	}
 
-	err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
+	int err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
 	if (err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
 		return err;
@@ -310,7 +304,13 @@ int optiga_init(struct device *dev)
 		return -EINVAL;
 	}
 
-	int err = optiga_open_application(dev, NULL);
+	/* bring the protocol stack to a known state */
+	int err = optiga_reset(dev);
+	if (err != 0) {
+		return err;
+	}
+
+	err = optiga_open_application(dev, NULL);
 	if(err != 0) {
 		return err;
 	}
@@ -374,11 +374,21 @@ static void optiga_hibernate(struct device *dev)
 	/* Can power down OPTIGA */
 	bool save_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
 	int res = optiga_close_application(dev, save_ctx ? data->hibernate_handle : NULL);
-	if (res == 0) {
-		optiga_power(dev, false);
-	} else {
+	if (res != 0) {
 		LOG_INF("OPTIGA not ready for Hibernate");
+		return;
 	}
+
+	if (atomic_get(&data->shield_state) == OPTIGA_SHIELD_ENABLED) {
+		res = optiga_pre_save_ctx(dev);
+		if (res != 0) {
+			LOG_WRN("Couldn't save Shield state");
+			/* Need to re-handshake */
+			atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+		}
+	}
+
+	optiga_power(dev, false);
 }
 
 /* Wakes the OPTIGA from Hibernate mode */
@@ -387,8 +397,43 @@ static void optiga_wakup(struct device *dev)
 	struct optiga_data *data = dev->driver_data;
 
 	optiga_power(dev, true);
+
+	/* bring the protocol stack to a known state */
+	int err = optiga_phy_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA phy layer");
+		return;
+	}
+
+	err = optiga_data_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA data link layer");
+		return;
+	}
+
+	// TODO(chr): possible to skip?
+	err = optiga_nettran_init(dev);
+	if(err != 0) {
+		LOG_ERR("Failed to initialise OPTIGA nettran layer");
+		return;
+	}
+
+	/* Don't re-init optiga_pre, to avoid loosing the keys */
+
+	if (atomic_get(&data->shield_state) == OPTIGA_SHIELD_ENABLED) {
+		optiga_nettran_presence_enable(dev);
+		int res = optiga_pre_restore_ctx(dev);
+		if (res != 0) {
+			LOG_WRN("Coulnd't restore Shield state");
+			atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+		} else {
+			LOG_INF("Shield restored");
+		}
+	}
+
 	atomic_t reservations = atomic_get(&data->session_reservations);
 	bool restore_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
+
 	// TODO(chr): error handling
 	optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
 }
@@ -536,10 +581,20 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 				}
 
 				LOG_ERR("Reseting OPTIGA, try: %d", data->reset_counter);
-				err = optiga_open_application(dev, NULL);
-				if(err != 0) {
-					/* If OpenApplication fails, something is seriously wrong */
-					LOG_ERR("Failed to do OpenApplication");
+
+				/* bring the protocol stack to a known state */
+				err = optiga_reset(dev);
+				if (err != 0) {
+					/* If reset fails, something is seriously wrong */
+					LOG_ERR("Failed to reset protocol stack");
+				}
+
+				if (err == 0) {
+					err = optiga_open_application(dev, NULL);
+					if(err != 0) {
+						/* If OpenApplication fails, something is seriously wrong */
+						LOG_ERR("Failed to do OpenApplication");
+					}
 				}
 
 				/*
