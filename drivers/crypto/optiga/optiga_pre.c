@@ -447,10 +447,6 @@ int optiga_pre_recv_handshake_finished(struct present_layer *pres, u8_t *buf, si
 	memcpy(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], OPTIGA_PRE_SEQ_LEN);
 	memcpy(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], pres->encrypted_apdu, OPTIGA_PRE_SEQ_LEN);
 
-	/* Increment Sequence numbers for first exchanged message */
-	optiga_pre_seq_inc(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
-	optiga_pre_seq_inc(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
-
 	return 0;
 }
 
@@ -533,13 +529,14 @@ int optiga_pre_do_handshake(struct device *dev)
 
 int optiga_pre_decrypt_apdu(struct present_layer *pres, u8_t *buf, size_t *len)
 {
+
+	/* Increment Sequence numbers for exchanged message */
+	optiga_pre_seq_inc(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+
 	int res = optiga_pre_decrypt(pres, buf, len);
 	if (res != 0) {
 		return res;
 	}
-
-	/* Increment Sequence numbers for exchanged message */
-	optiga_pre_seq_inc(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
 
 	return 0;
 }
@@ -566,6 +563,8 @@ int optiga_pre_recv_apdu(struct device *dev, u8_t *apdu, size_t *len)
 
 int optiga_pres_encrypt_apdu(struct present_layer *pres, const u8_t *apdu, size_t len)
 {
+	optiga_pre_seq_inc(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+
 	const u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
 	const u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_REC_EXCHG | OPTIGA_PRE_SCTR_PROTECTION_MASTER | OPTIGA_PRE_SCTR_PROTECTION_SLAVE;
 
@@ -574,8 +573,6 @@ int optiga_pres_encrypt_apdu(struct present_layer *pres, const u8_t *apdu, size_
 	if(res != 0) {
 		return -EINVAL;
 	}
-
-	optiga_pre_seq_inc(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
 	return 0;
 }
 
