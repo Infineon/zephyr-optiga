@@ -524,7 +524,6 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 
 				/* Try to send an APDU to the OPTIGA */
 				err = optiga_transfer_apdu(dev, apdu);
-
 				if (err != 0) {
 					/* Forward error to users and mark APDU as handled */
 					k_poll_signal_raise(&apdu->finished, err);
@@ -536,6 +535,12 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 				} else {
 					/* Successfull transfer, if a problem existed it's solved now */
 					data->reset_counter = 0;
+				}
+
+				if (optiga_nettran_presence_get(dev) && optiga_pre_need_rehandshake(dev)) {
+					if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED)) {
+						LOG_INF("Executing re-handshake");
+					}
 				}
 
 				/* Check if APDU signals an error and retrieve it */
@@ -553,6 +558,12 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 						/* Transfer failed, try to reset the device */
 						state = WORKER_RESET;
 						break;
+					}
+
+					if (optiga_nettran_presence_get(dev) && optiga_pre_need_rehandshake(dev)) {
+						if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED)) {
+							LOG_INF("Executing re-handshake");
+						}
 					}
 
 					/* Forward OPTIGA error code to users, mark APDU as handled */

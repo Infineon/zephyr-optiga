@@ -46,6 +46,7 @@ struct present_layer {
 };
 int optiga_pre_init(struct device *dev);
 int optiga_pre_set_shared_secret(struct device *dev, const u8_t *ssec, size_t ssec_len);
+bool optiga_pre_need_rehandshake(struct device *dev);
 int optiga_pre_do_handshake(struct device *dev);
 int optiga_pre_save_ctx(struct device *dev);
 int optiga_pre_restore_ctx(struct device *dev);

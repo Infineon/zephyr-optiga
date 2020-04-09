@@ -172,8 +172,26 @@ static void optiga_pre_seq_inc(u8_t *seq)
 {
 	u32_t tmp = sys_get_be32(seq);
 	tmp++;
-	// TODO(chr): check for overflow?
 	sys_put_be32(tmp, seq);
+}
+
+static bool optiga_pre_seq_ovf(const u8_t *seq)
+{
+	u32_t tmp = sys_get_be32(seq);
+	return tmp == UINT32_MAX;
+}
+
+// For debugging purposes
+void optiga_pre_seq_get(struct device *dev, u32_t *mseq, u32_t *sseq)
+{
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	const u8_t *mseq_l = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+	const u8_t *sseq_l = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+
+	*mseq = sys_get_be32(mseq_l);
+	*sseq = sys_get_be32(sseq_l);
 }
 
 void optiga_pre_clear_keys(struct present_layer *pres)
@@ -529,9 +547,14 @@ int optiga_pre_do_handshake(struct device *dev)
 
 int optiga_pre_decrypt_apdu(struct present_layer *pres, u8_t *buf, size_t *len)
 {
+	u8_t* sseq = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+	if (optiga_pre_seq_ovf(sseq)) {
+		/* We MUST NOT overflow the nonce */
+		return -EIO;
+	}
 
 	/* Increment Sequence numbers for exchanged message */
-	optiga_pre_seq_inc(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+	optiga_pre_seq_inc(sseq);
 
 	int res = optiga_pre_decrypt(pres, buf, len);
 	if (res != 0) {
@@ -563,16 +586,21 @@ int optiga_pre_recv_apdu(struct device *dev, u8_t *apdu, size_t *len)
 
 int optiga_pres_encrypt_apdu(struct present_layer *pres, const u8_t *apdu, size_t len)
 {
-	optiga_pre_seq_inc(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS]);
+	u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+	if (optiga_pre_seq_ovf(mseq)) {
+		/* We MUST NOT overflow the nonce */
+		return -EIO;
+	}
 
-	const u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+	optiga_pre_seq_inc(mseq);
+
 	const u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_REC_EXCHG | OPTIGA_PRE_SCTR_PROTECTION_MASTER | OPTIGA_PRE_SCTR_PROTECTION_SLAVE;
-
 	int res = optiga_pre_encrypt(pres, sctr, mseq, apdu, len);
 
 	if(res != 0) {
 		return -EINVAL;
 	}
+
 	return 0;
 }
 
@@ -657,4 +685,15 @@ int optiga_pre_restore_ctx(struct device *dev)
 	}
 
 	return 0;
+}
+
+bool optiga_pre_need_rehandshake(struct device *dev)
+{
+	struct optiga_data *data = dev->driver_data;
+	struct present_layer *pres = &data->present;
+
+	const u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+	const u8_t *sseq = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+
+	return optiga_pre_seq_ovf(mseq) || optiga_pre_seq_ovf(sseq);
 }
