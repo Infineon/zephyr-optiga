@@ -147,6 +147,11 @@ static const u8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
 	0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
 };
 
+/* Param value to restore application state from Hibernation */
+#define OPTIGA_OPEN_APP_PARAM_RESTORE 0x01
+/* Length value for restore command */
+#define OPTIGA_OPEN_APP_LENGTH (16 + OPTIGA_CTX_HANDLE_LEN)
+
 /*
  * Initializes the application on the OPTIGA chip
  */
@@ -165,8 +170,8 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 	if (handle == NULL) {
 		tmp_buf_len = OPTIGA_OPEN_APPLICATION_LEN;
 	} else {
-		tmp_buf[OPTIGA_PARAM_OFFS] = 0x01; // TODO(chr): extract constant
-		tmp_buf[OPTIGA_LEN_OFFS] = 0x18; // TODO(chr): extract constant, Application Identifier + Context handle
+		tmp_buf[OPTIGA_PARAM_OFFS] = OPTIGA_OPEN_APP_PARAM_RESTORE;
+		tmp_buf[OPTIGA_LEN_OFFS] = OPTIGA_OPEN_APP_LENGTH;
 		memcpy(tmp_buf + OPTIGA_OPEN_APPLICATION_LEN, handle, OPTIGA_CTX_HANDLE_LEN);
 		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	}
@@ -206,6 +211,9 @@ static const u8_t optiga_close_application_apdu[OPTIGA_CLOSE_APPLICATION_LEN] =
 	0x00, 0x00, /* No InData */
 };
 
+/* Param value to Hibernate the application */
+#define OPTIGA_CLOSE_APP_PARAM_HIBERNATE 0x01
+
 static int optiga_close_application(struct device *dev, u8_t *handle)
 {
 	u8_t tmp_buf[OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET] = {0};
@@ -216,7 +224,7 @@ static int optiga_close_application(struct device *dev, u8_t *handle)
 	tmp_buf_len = OPTIGA_CLOSE_APPLICATION_LEN;
 
 	if (handle != NULL) {
-		tmp_buf[OPTIGA_PARAM_OFFS] = 0x01; // TODO(chr): extract constant
+		tmp_buf[OPTIGA_PARAM_OFFS] = OPTIGA_CLOSE_APP_PARAM_HIBERNATE;
 	}
 
 	int err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
@@ -654,14 +662,18 @@ static void session_release(struct device *dev, int session_idx)
 static int start_shield(struct device *dev, const u8_t *key, size_t key_len)
 {
 	struct optiga_data *data = dev->driver_data;
-	if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_DISABLED, OPTIGA_SHIELD_LOADING_KEY)
-		|| atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_LOADING_KEY)) {
+	const bool prev_disabled = atomic_cas(&data->shield_state, OPTIGA_SHIELD_DISABLED, OPTIGA_SHIELD_LOADING_KEY);
+	const bool prev_loaded =  atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_LOADING_KEY);
+	if (prev_disabled || prev_loaded) {
 		int res = optiga_pre_set_shared_secret(dev, key, key_len);
 		if (res != 0) {
 			/* Can only happen with invalid key */
 			LOG_ERR("Failed to set key: %d", res);
-			// TODO(chr): don't just turn of shielded connection on error
-			atomic_set(&data->shield_state, OPTIGA_SHIELD_DISABLED);
+			if (prev_disabled) {
+				atomic_set(&data->shield_state, OPTIGA_SHIELD_DISABLED);
+			} else {
+				atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+			}
 			return res;
 		}
 
@@ -669,8 +681,7 @@ static int start_shield(struct device *dev, const u8_t *key, size_t key_len)
 		return 0;
 	}
 
-	// TODO(chr): better error code
-	return -EBUSY;
+	return -EALREADY;
 }
 
 static const struct optiga_api optiga_api_funcs = {
