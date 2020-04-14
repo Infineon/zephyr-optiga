@@ -17,15 +17,15 @@
 
 #define OPTIGA_PRE_MAC_LEN 8
 #define OPTIGA_PRE_ASSOC_DATA_LEN 8
-
 #define OPTIGA_PRE_SCTR_LEN 1
-#define OPTIGA_PRE_SSEQ_LEN 4
+#define OPTIGA_PRE_SEQ_LEN 4
 
+#define OPTIGA_PRE_OVERHEAD (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SEQ_LEN + OPTIGA_PRE_MAC_LEN)
 
 // TODO(chr): need to define appropriately or make configurable
 #define OPTIGA_PRE_MAX_APDU_SIZE 1400
 
-#define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN + OPTIGA_PRE_MAX_APDU_SIZE)
+#define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_OVERHEAD + OPTIGA_PRE_MAX_APDU_SIZE)
 
 struct present_layer {
 	// TODO(chr): need to store permanently? What on re-schedule?
@@ -39,11 +39,14 @@ struct present_layer {
 	u8_t encrypted_apdu[OPTIGA_PRE_MAX_ENC_APDU_LEN];
 	size_t encrypted_apdu_len;
 	u8_t assoc_data_buf[OPTIGA_PRE_ASSOC_DATA_LEN];
+
+	/* Protocol version */
 	u8_t pver;
 
 	/* Context used for encrypt/decrypt of packets */
 	mbedtls_ccm_context aes_ccm_ctx;
 };
+
 int optiga_pre_init(struct device *dev);
 int optiga_pre_set_shared_secret(struct device *dev, const u8_t *ssec, size_t ssec_len);
 bool optiga_pre_need_rehandshake(struct device *dev);

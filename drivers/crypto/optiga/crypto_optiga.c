@@ -507,7 +507,7 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 				state = WORKER_PROCESS_APDU;
 				break;
 			case WORKER_PROCESS_APDU:
-				__ASSERT(apdu != NULL, "APDU must never be NULL");
+				__ASSERT(apdu != NULL, "No APDU to process");
 				__ASSERT(data->open, "OPTIGA must be opened");
 
 				/* Check if we need to execute the handshake for shielded connection*/

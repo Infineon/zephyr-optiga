@@ -92,6 +92,9 @@ enum OPTIGA_PRE_PVER {
 /* Offset of SSEQ/MSEQ in NONCE data */
 #define OPTIGA_PRE_NONCE_SEQ_OFFS 4
 
+/* Payload length of "Hello" message from Master to Slave */
+#define OPTIGA_PRE_HS_HOST_HELLO (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_PVER_LEN)
+
 /* Payload length of "Finish" phase of handshake */
 #define OPTIGA_PRE_HS_FINISH_PAYLOAD_LEN (OPTIGA_PRE_RND_LEN + OPTIGA_PRE_SEQ_LEN)
 
@@ -168,20 +171,37 @@ static int tls_prf_sha256( const u8_t *secret, size_t slen,
 	return 0;
 }
 
-static void optiga_pre_seq_inc(u8_t *seq)
-{
-	u32_t tmp = sys_get_be32(seq);
-	tmp++;
-	sys_put_be32(tmp, seq);
-}
-
-static bool optiga_pre_seq_ovf(const u8_t *seq)
+/*
+ * @brief Check if SEQ has reached the maximum value
+ * @param seq SEQ value to check
+ * @return true when the maximum is reached, false else
+ */
+static bool optiga_pre_seq_max(const u8_t *seq)
 {
 	u32_t tmp = sys_get_be32(seq);
 	return tmp == UINT32_MAX;
 }
 
-// For debugging purposes
+/*
+ * @brief Increment SEQ value
+ * @param seq SEQ value to increment
+ * @return true when SEQ was incremented, false on overflow
+ * @note The return value of this function MUST be checked, if it's false
+ *       SEQ must not be used for encryption.
+ */
+static bool optiga_pre_seq_inc(u8_t *seq)
+{
+	if (optiga_pre_seq_max(seq)) {
+		return false;
+	}
+
+	u32_t tmp = sys_get_be32(seq);
+	tmp++;
+	sys_put_be32(tmp, seq);
+	return true;
+}
+
+/* For debugging purposes */
 void optiga_pre_seq_get(struct device *dev, u32_t *mseq, u32_t *sseq)
 {
 	struct optiga_data *data = dev->driver_data;
@@ -196,12 +216,11 @@ void optiga_pre_seq_get(struct device *dev, u32_t *mseq, u32_t *sseq)
 
 void optiga_pre_clear_keys(struct present_layer *pres)
 {
-	// TODO(chr): use cryptographic memzero?
-	memset(pres->master_enc_key, 0, OPTIGA_PRE_AES128_KEY_LEN);
-	memset(pres->master_dec_key, 0, OPTIGA_PRE_AES128_KEY_LEN);
-	memset(pres->master_enc_nonce, 0, OPTIGA_PRE_AES128_NONCE_LEN);
-	memset(pres->master_dec_nonce, 0, OPTIGA_PRE_AES128_NONCE_LEN);
-	memset(pres->encrypted_apdu, 0, OPTIGA_PRE_MAX_ENC_APDU_LEN);
+	mbedtls_platform_zeroize(pres->master_enc_key, OPTIGA_PRE_AES128_KEY_LEN);
+	mbedtls_platform_zeroize(pres->master_dec_key, OPTIGA_PRE_AES128_KEY_LEN);
+	mbedtls_platform_zeroize(pres->master_enc_nonce, OPTIGA_PRE_AES128_NONCE_LEN);
+	mbedtls_platform_zeroize(pres->master_dec_nonce, OPTIGA_PRE_AES128_NONCE_LEN);
+	mbedtls_platform_zeroize(pres->encrypted_apdu, OPTIGA_PRE_MAX_ENC_APDU_LEN);
 }
 
 int optiga_pre_init(struct device *dev) {
@@ -236,21 +255,28 @@ int optiga_pre_set_shared_secret(struct device *dev, const u8_t *ssec, size_t ss
 	return 0;
 }
 
-static size_t optiga_pre_send_hello(u8_t *buf)
+/**
+ * @brief Prepare the "Hello" message from Master to Slave
+ * @param buf Buffer to write the message into, must be at least OPTIGA_PRE_HS_HOST_HELLO bytes
+ * @param pver Protocol version to request
+ * @return Number of bytes written
+ */
+static size_t optiga_pre_send_hello(u8_t *buf, u8_t pver)
 {
 	buf[OPTIGA_PRE_SCTR_OFFS] = OPTIGA_PRE_SCTR_PROTOCOL_HANDSHAKE | OPTIGA_PRE_SCTR_PROTOCOL_HS_HELLO;
-	/* Only support pre shared key for now */
-	buf[OPTIGA_PRE_PVER_OFFS] = OPTIGA_PRE_PVER_PRE_SHARED;
+	buf[OPTIGA_PRE_PVER_OFFS] = pver;
 
-	return OPTIGA_PRE_PVER_OFFS + OPTIGA_PRE_PVER_LEN;
+	return OPTIGA_PRE_HS_HOST_HELLO;
 }
 
-static int optiga_pre_recv_hello(struct device *dev, u8_t *buf, size_t len, u8_t *rnd)
+/**
+ * @brief Parse the "Hello" message from Slave to Master
+ * @param buf Buffer containing the message
+ * @param rnd Buffer to store RND value from Slave
+ */
+static int optiga_pre_recv_hello(struct present_layer *pres, u8_t *buf, size_t len, u8_t *rnd)
 {
-	struct optiga_data *data = dev->driver_data;
-	struct present_layer *pres = &data->present;
-
-	if (len != (OPTIGA_PRE_SSEQ_OFFS + OPTIGA_PRE_SSEQ_LEN)) {
+	if (len != (OPTIGA_PRE_SSEQ_OFFS + OPTIGA_PRE_SEQ_LEN)) {
 		/* Unexpected length */
 		return -EINVAL;
 	}
@@ -269,16 +295,13 @@ static int optiga_pre_recv_hello(struct device *dev, u8_t *buf, size_t len, u8_t
 	memcpy(rnd, &buf[OPTIGA_PRE_RND_OFFS], OPTIGA_PRE_RND_LEN);
 
 	/* Put SSEQ into master encryption nonce */
-	memcpy(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], &buf[OPTIGA_PRE_SSEQ_OFFS], OPTIGA_PRE_SSEQ_LEN);
+	memcpy(&pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], &buf[OPTIGA_PRE_SSEQ_OFFS], OPTIGA_PRE_SEQ_LEN);
 
 	return 0;
 }
 
-static int optiga_pre_derive_keys(struct device *dev, const u8_t *rnd)
+static int optiga_pre_derive_keys(struct present_layer *pres, const u8_t *rnd)
 {
-	struct optiga_data *data = dev->driver_data;
-	struct present_layer *pres = &data->present;
-
 	u8_t tmp_buf[OPTIGA_PRE_DERIVED_LEN] = {0};
 
 	int res = tls_prf_sha256(pres->pre_shared_secret, OPTIGA_PRE_PRE_SHARED_SECRET_LEN,
@@ -298,7 +321,14 @@ static int optiga_pre_derive_keys(struct device *dev, const u8_t *rnd)
 	return 0;
 }
 
-void optiga_pre_assemble_assoc_data(struct present_layer *pres, u8_t sctr, const u8_t *seq, u16_t payload_len)
+/**
+ * @brief Helper to assemble the associated data for encryption/decryption
+ * @param pres Presentation layer instance
+ * @param sctr SCTR value of associated data
+ * @param seq Pointer to SEQ field of associated data
+ * @param payload_len Length of the payload
+ */
+static void optiga_pre_assemble_assoc_data(struct present_layer *pres, u8_t sctr, const u8_t *seq, u16_t payload_len)
 {
 	u8_t *assoc = pres->assoc_data_buf;
 
@@ -321,16 +351,17 @@ int optiga_pre_encrypt(struct present_layer *pres, u8_t sctr, const u8_t *seq, c
 		return -ENOMEM;
 	}
 
-
 	/* Assemble associated data */
 	optiga_pre_assemble_assoc_data(pres, sctr, seq, len);
 
 	/* Assemble final packet header*/
 	u8_t *packet = pres->encrypted_apdu;
 
+	/* SCTR field */
 	*packet = sctr;
 	packet += OPTIGA_PRE_SCTR_LEN;
 
+	/* SEQ field */
 	memcpy(packet, seq, OPTIGA_PRE_SEQ_LEN);
 	packet += OPTIGA_PRE_SEQ_LEN;
 
@@ -359,7 +390,7 @@ int optiga_pre_encrypt(struct present_layer *pres, u8_t sctr, const u8_t *seq, c
 		return -EINVAL;
 	}
 
-	pres->encrypted_apdu_len = OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SEQ_LEN + len + OPTIGA_PRE_MAC_LEN;
+	pres->encrypted_apdu_len = OPTIGA_PRE_OVERHEAD + len;
 	return 0;
 }
 
@@ -378,12 +409,12 @@ int optiga_pre_send_handshake_finished(struct present_layer *pres, const u8_t *r
 
 int optiga_pre_decrypt(struct present_layer *pres, u8_t *buf, size_t *len)
 {
-	if (pres->encrypted_apdu_len < (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN)) {
+	if (pres->encrypted_apdu_len < (OPTIGA_PRE_OVERHEAD)) {
 		/* Unexpected length */
 		return -EINVAL;
 	}
 
-	const size_t buf_len = pres->encrypted_apdu_len - (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SSEQ_LEN + OPTIGA_PRE_MAC_LEN);
+	const size_t buf_len = pres->encrypted_apdu_len - OPTIGA_PRE_OVERHEAD;
 	if (buf_len > *len) {
 		/* Not enough memory in output buffer */
 		return -EINVAL;
@@ -391,8 +422,11 @@ int optiga_pre_decrypt(struct present_layer *pres, u8_t *buf, size_t *len)
 
 	const u8_t *packet = pres->encrypted_apdu;
 
+	/* SCTR field */
 	u8_t sctr = *packet;
 	packet += OPTIGA_PRE_SCTR_LEN;
+
+	/* SEQ field */
 	const u8_t *seq = packet;
 	packet += OPTIGA_PRE_SEQ_LEN;
 
@@ -480,7 +514,7 @@ int optiga_pre_do_handshake(struct device *dev)
 	pres->pver = OPTIGA_PRE_PVER_PRE_SHARED;
 
 	/* First step: request RND and SSEQ */
-	pres->encrypted_apdu_len = optiga_pre_send_hello(pres->encrypted_apdu);
+	pres->encrypted_apdu_len = optiga_pre_send_hello(pres->encrypted_apdu, pres->pver);
 
 	int res = optiga_nettran_send_apdu(dev, pres->encrypted_apdu, pres->encrypted_apdu_len);
 	if (res != 0) {
@@ -495,13 +529,13 @@ int optiga_pre_do_handshake(struct device *dev)
 
 	/* Receive RND and SSEQ */
 	u8_t rnd[OPTIGA_PRE_RND_LEN] = {0};
-	res = optiga_pre_recv_hello(dev, pres->encrypted_apdu, pres->encrypted_apdu_len, rnd);
+	res = optiga_pre_recv_hello(pres, pres->encrypted_apdu, pres->encrypted_apdu_len, rnd);
 	if (res != 0) {
 		goto cleanup;
 	}
 
 	/* Derive master and slave encrypt/decrypt keys */
-	res = optiga_pre_derive_keys(dev, rnd);
+	res = optiga_pre_derive_keys(pres, rnd);
 	if (res != 0) {
 		goto cleanup;
 	}
@@ -545,16 +579,15 @@ int optiga_pre_do_handshake(struct device *dev)
 #undef TMP_BUF_LEN
 }
 
-int optiga_pre_decrypt_apdu(struct present_layer *pres, u8_t *buf, size_t *len)
+static int optiga_pre_decrypt_apdu(struct present_layer *pres, u8_t *buf, size_t *len)
 {
 	u8_t* sseq = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
-	if (optiga_pre_seq_ovf(sseq)) {
+
+	/* Increment Sequence numbers for exchanged message */
+	if (!optiga_pre_seq_inc(sseq)) {
 		/* We MUST NOT overflow the nonce */
 		return -EIO;
 	}
-
-	/* Increment Sequence numbers for exchanged message */
-	optiga_pre_seq_inc(sseq);
 
 	int res = optiga_pre_decrypt(pres, buf, len);
 	if (res != 0) {
@@ -584,15 +617,14 @@ int optiga_pre_recv_apdu(struct device *dev, u8_t *apdu, size_t *len)
 	}
 }
 
-int optiga_pres_encrypt_apdu(struct present_layer *pres, const u8_t *apdu, size_t len)
+static int optiga_pres_encrypt_apdu(struct present_layer *pres, const u8_t *apdu, size_t len)
 {
 	u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
-	if (optiga_pre_seq_ovf(mseq)) {
+
+	if (!optiga_pre_seq_inc(mseq)) {
 		/* We MUST NOT overflow the nonce */
 		return -EIO;
 	}
-
-	optiga_pre_seq_inc(mseq);
 
 	const u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_REC_EXCHG | OPTIGA_PRE_SCTR_PROTECTION_MASTER | OPTIGA_PRE_SCTR_PROTECTION_SLAVE;
 	int res = optiga_pre_encrypt(pres, sctr, mseq, apdu, len);
@@ -695,5 +727,5 @@ bool optiga_pre_need_rehandshake(struct device *dev)
 	const u8_t *mseq = &pres->master_enc_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
 	const u8_t *sseq = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
 
-	return optiga_pre_seq_ovf(mseq) || optiga_pre_seq_ovf(sseq);
+	return optiga_pre_seq_max(mseq) || optiga_pre_seq_max(sseq);
 }
