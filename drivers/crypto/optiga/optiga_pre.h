@@ -19,6 +19,9 @@
 #define OPTIGA_PRE_ASSOC_DATA_LEN 8
 #define OPTIGA_PRE_SCTR_LEN 1
 #define OPTIGA_PRE_SEQ_LEN 4
+#define OPTIGA_PRE_RND_LEN 32
+
+#define OPTIGA_PRE_DERIVED_SECRET_LEN 40
 
 #define OPTIGA_PRE_OVERHEAD (OPTIGA_PRE_SCTR_LEN + OPTIGA_PRE_SEQ_LEN + OPTIGA_PRE_MAC_LEN)
 
@@ -26,6 +29,30 @@
 #define OPTIGA_PRE_MAX_APDU_SIZE 1400
 
 #define OPTIGA_PRE_MAX_ENC_APDU_LEN (OPTIGA_PRE_OVERHEAD + OPTIGA_PRE_MAX_APDU_SIZE)
+
+// TODO(chr): find out the longest message that needs to fit here
+#define OPTIGA_PRE_SCRATCH_LEN 60
+
+struct optiga_pre_handshake_buf {
+	// TODO(chr): better naming
+	u8_t scratch[OPTIGA_PRE_SCRATCH_LEN];
+	size_t scratch_len;
+	// TODO(chr): better naming
+	u8_t scratch2[OPTIGA_PRE_SCRATCH_LEN];
+	size_t scratch2_len;
+	u8_t rnd[OPTIGA_PRE_RND_LEN];
+	u8_t deriv_secret[OPTIGA_PRE_DERIVED_SECRET_LEN];
+};
+
+struct optiga_pre_operation_buf {
+	u8_t encrypted_apdu[OPTIGA_PRE_MAX_ENC_APDU_LEN];
+	size_t encrypted_apdu_len;
+};
+
+union optiga_pre_buf {
+	struct optiga_pre_operation_buf op;
+	struct optiga_pre_handshake_buf hs;
+};
 
 struct present_layer {
 	// TODO(chr): need to store permanently? What on re-schedule?
@@ -36,15 +63,16 @@ struct present_layer {
 	u8_t master_enc_nonce[OPTIGA_PRE_AES128_NONCE_LEN];
 	u8_t master_dec_nonce[OPTIGA_PRE_AES128_NONCE_LEN];
 
-	u8_t encrypted_apdu[OPTIGA_PRE_MAX_ENC_APDU_LEN];
-	size_t encrypted_apdu_len;
 	u8_t assoc_data_buf[OPTIGA_PRE_ASSOC_DATA_LEN];
+
+	/* Context used for encrypt/decrypt of packets */
+	mbedtls_ccm_context aes_ccm_ctx;
+
+	union optiga_pre_buf buf;
 
 	/* Protocol version */
 	u8_t pver;
 
-	/* Context used for encrypt/decrypt of packets */
-	mbedtls_ccm_context aes_ccm_ctx;
 };
 
 int optiga_pre_init(struct device *dev);
