@@ -16,7 +16,7 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(optiga);
 
-#define OPTIGA_SHIELD_STACK_ADDITION (128 + 64)
+#define OPTIGA_SHIELD_STACK_ADDITION (64)
 
 // determined by experiment
 #define OPTIGA_STACK_SIZE (512+256 + OPTIGA_SHIELD_STACK_ADDITION)
