@@ -46,31 +46,73 @@ enum OPTIGA_TRUSTM_SET_DATA_OBJECT {
 #define OPTIGA_TRUSTM_OUT_LEN_OFFSET 2
 #define OPTIGA_TRUSTM_OUT_DATA_OFFSET 4
 
-#define SET_TLV_OVERHEAD 3
+#define TLV_TAG_LEN 1
+#define TLV_LEN_LEN 2
+
+#define TLV_TAG_OFFS 0
+#define TLV_LEN_OFFS (TLV_TAG_OFFS + TLV_TAG_LEN)
+#define TLV_VAL_OFFS (TLV_LEN_OFFS + TLV_LEN_LEN)
+
+#define TLV_OVERHEAD (TLV_TAG_LEN + TLV_LEN_LEN)
 static size_t set_tlv(u8_t *buf, u8_t tag, const u8_t *val, size_t val_len)
 {
-	buf[0] = tag;
-	sys_put_be16(val_len, &buf[1]);
-	memcpy(&buf[3], val, val_len);
-	return val_len + SET_TLV_OVERHEAD;
+	buf[TLV_TAG_OFFS] = tag;
+	sys_put_be16(val_len, &buf[TLV_LEN_OFFS]);
+	memcpy(&buf[TLV_VAL_OFFS], val, val_len);
+	return val_len + TLV_OVERHEAD;
 }
 
 #define SET_TLV_U8_LEN 4
 static size_t set_tlv_u8(u8_t *buf, u8_t tag, u8_t val)
 {
-	buf[0] = tag;
-	sys_put_be16(1, &buf[1]);
-	buf[3] = val;
+	buf[TLV_TAG_OFFS] = tag;
+	sys_put_be16(1, &buf[TLV_LEN_OFFS]);
+	buf[TLV_VAL_OFFS] = val;
 	return SET_TLV_U8_LEN;
 }
 
 #define SET_TLV_U16_LEN 5
 static size_t set_tlv_u16(u8_t *buf, u8_t tag, u16_t val)
 {
-	buf[0] = tag;
-	sys_put_be16(2, &buf[1]);
-	sys_put_be16(val, &buf[3]);
+	buf[TLV_TAG_OFFS] = tag;
+	sys_put_be16(2, &buf[TLV_LEN_OFFS]);
+	sys_put_be16(val, &buf[TLV_VAL_OFFS]);
 	return SET_TLV_U16_LEN;
+}
+
+static bool get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** value)
+{
+	if(buf == NULL) {
+		return false;
+	}
+
+	if (buf_len < TLV_OVERHEAD) {
+		return false;
+	}
+
+	u8_t *tlv_start = buf;
+
+	if (tag) {
+		*tag = *tlv_start;
+	}
+	tlv_start += TLV_TAG_LEN;
+
+	u16_t tlv_len = sys_get_be16(tlv_start);
+	if (tlv_len > (buf_len - TLV_OVERHEAD)) {
+		/* Value field longer than buffer */
+		return false;
+	}
+
+	if (len) {
+		*len = tlv_len;
+	}
+
+	tlv_start += TLV_LEN_LEN;
+	if(value) {
+		*value = tlv_start;
+	}
+
+	return true;
 }
 
 static size_t cmds_set_apdu_header(u8_t *apdu_start, enum OPTIGA_TRUSTM_CMD cmd, u8_t param, u16_t in_len)
@@ -496,23 +538,22 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL, "No NULL parameters allowed");
 	__ASSERT(ctx->apdu_buf_len >= 11, "APDU buffer too small");
-	__ASSERT(pub_key_len != NULL, "Invalid NULL pointer");
 
 	switch(alg) {
         case OPTRUST_ALGORITHM_NIST_P256:
-            if(*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN) {
+		if (*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN) {
 				return -EINVAL;
-			}
-            *pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
-			break;
+		}
+		*pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
+		break;
         case OPTRUST_ALGORITHM_NIST_P384:
-            if(*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN) {
-				return -EINVAL;
-			}
-            *pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
-			break;
-		default:
+		if (*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN) {
 			return -EINVAL;
+		}
+		*pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
+		break;
+	default:
+		return -EINVAL;
 	}
 
 	u8_t *tx_buf = ctx->apdu_buf;
@@ -572,6 +613,117 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	rx_buf += 4; // skip ASN.1 tag, length and 2 value bytes
 	memcpy(pub_key, rx_buf, *pub_key_len);
 
+	return 0;
+}
+
+int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
+				enum OPTRUST_ALGORITHM alg,
+				u8_t *sec_key, size_t *sec_key_len,
+				u8_t *pub_key, size_t *pub_key_len)
+{
+	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
+		&& sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
+	// TODO(chr): compute needed buffer size
+	__ASSERT(ctx->apdu_buf_len >= 200, "APDU buffer too small");
+
+	switch(alg) {
+        case OPTRUST_ALGORITHM_NIST_P256:
+		if (*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN
+			|| *sec_key_len < OPTRUST_NIST_P256_SEC_KEY_LEN) {
+			return -EINVAL;
+		}
+
+		*sec_key_len = OPTRUST_NIST_P256_SEC_KEY_LEN;
+		*pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
+	break;
+        case OPTRUST_ALGORITHM_NIST_P384:
+		if(*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN
+			|| *sec_key_len < OPTRUST_NIST_P384_SEC_KEY_LEN) {
+			return -EINVAL;
+		}
+
+		*sec_key_len = OPTRUST_NIST_P384_SEC_KEY_LEN;
+		*pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	u8_t *tx_buf = ctx->apdu_buf;
+	tx_buf += cmds_set_apdu_header(tx_buf,
+				OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
+				alg, /* Key algorithm */
+				0x03 /* Command len, see datasheet Table 19 */);
+
+	/* Export key pair in plain */
+	tx_buf += set_tlv(tx_buf, 0x07, NULL, 0);
+
+	/*
+	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
+	 * we don't need the written data
+	 */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
+	ctx->apdu.rx_buf = ctx->apdu_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len;
+
+	int result_code = cmds_submit_apdu(ctx);
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("GetDataObject Error Code: %d", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+	size_t rx_len = ctx->apdu.rx_len;
+
+	u8_t sta = 0;
+	u16_t out_len = 0;
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+
+	__ASSERT(((OPTIGA_TRUSTM_IN_DATA_OFFSET + out_len) == rx_len), "Invalid length in APDU");
+
+	u8_t tag = 0;
+	u16_t len = 0;
+	u8_t *sec_key_asn1 = NULL;
+
+	/* Parse secrect key */
+	bool res = get_tlv(rx_buf, out_len, &tag, &len, &sec_key_asn1);
+	if (!res) {
+		/* Failed to parse TLV data structure */
+		return -EIO;
+	}
+
+	if (tag != 0x01) {
+		/* Unexpected Tag */
+		return -EIO;
+	}
+
+	/* Parse public key */
+	rx_buf = sec_key_asn1 + len;
+	out_len -= len;
+
+	u8_t *pub_key_asn1 = NULL;
+	res = get_tlv(rx_buf, rx_len, &tag, &len, &pub_key_asn1);
+	if (!res) {
+		/* Failed to parse TLV data structure */
+		return -EIO;
+	}
+
+	if (tag != 0x02) {
+		/* Unexpected Tag */
+		return -EIO;
+	}
+
+	//TODO(chr): ASN.1 parsing of secret/public key
 	return 0;
 }
 

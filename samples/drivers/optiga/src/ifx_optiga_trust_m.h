@@ -103,9 +103,10 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
  */
 int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
 
-
-#define OPTRUST_NIST_P256_PUB_KEY_LEN 64
-#define OPTRUST_NIST_P384_PUB_KEY_LEN 96
+#define OPTRUST_NIST_P256_SEC_KEY_LEN 32
+#define OPTRUST_NIST_P384_SEC_KEY_LEN 48
+#define OPTRUST_NIST_P256_PUB_KEY_LEN (OPTRUST_NIST_P256_SEC_KEY_LEN*2)
+#define OPTRUST_NIST_P384_PUB_KEY_LEN (OPTRUST_NIST_P384_SEC_KEY_LEN*2)
 
 enum OPTRUST_ALGORITHM {
     OPTRUST_ALGORITHM_NIST_P256 = 0x03,
@@ -136,6 +137,26 @@ enum OPTRUST_KEY_USAGE_FLAG {
  */
 int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
                 enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
+
+/**
+ * @brief Generate an ECDSA key pair and export private and public key
+ *
+ * @param ctx Command context to use
+ * @param alg Type of key pair to generate
+ * @param key_usage Combination of IFX_OPTIGA_TRUST_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
+ * @param priv_key Output buffer for the private key
+ * @param priv_key_len length of pub_key, contains the length of the private key
+ * @param pub_key Output buffer for the public key
+ * @param pub_key_len length of pub_key, contains the length of the public key
+ * @return 0 on success, error code otherwise
+ *
+ * @note The size of the public and private key buffers must match the selected algorithm or be bigger.
+ */
+int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
+				enum OPTRUST_ALGORITHM alg,
+				u8_t* priv_key, size_t * priv_key_len,
+				u8_t *pub_key, size_t *pub_key_len);
+
 
 #define OPTRUST_NIST_P256_SIGNATURE_LEN 64
 #define OPTRUST_NIST_P384_SIGNATURE_LEN 96
@@ -170,25 +191,6 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
  *  The following APIs are drafts for now
  */
 
-/**
- * @brief Generate an ECDSA key pair and export private and public key
- *
- * @param ctx Command context to use
- * @param alg Type of key pair to generate
- * @param key_usage Combination of IFX_OPTIGA_TRUST_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
- * @param priv_key Output buffer for the private key
- * @param priv_key_len length of pub_key, contains the length of the private key
- * @param pub_key Output buffer for the public key
- * @param pub_key_len length of pub_key, contains the length of the public key
- * @return 0 on success, error code otherwise
- *
- * @note The size of the public and private key buffers must match the selected algorithm or be bigger.
- */
-int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
-                enum OPTRUST_ALGORITHM alg,
-                enum OPTRUST_KEY_USAGE_FLAG key_usage,
-				u8_t* priv_key, size_t * priv_key_len,
-				u8_t *pub_key, size_t *pub_key_len);
 
 /**
  * @brief Perform an ECDH operation on a shared secret to derive a key

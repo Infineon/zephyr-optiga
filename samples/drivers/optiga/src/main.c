@@ -184,5 +184,15 @@ void main(void)
 
 	optrust_wake_lock_release(&ctx, wake_token);
 
+	u8_t sec_key[OPTRUST_NIST_P256_SEC_KEY_LEN] = {0};
+	size_t sec_key_len = OPTRUST_NIST_P256_SEC_KEY_LEN;
+	pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
+
+	time_stamp = k_uptime_get();
+
+	/* Generate ECC key pair */
+	res = optrust_ecc_gen_keys_ext(&ctx, OPTRUST_ALGORITHM_NIST_P256, sec_key, &sec_key_len, pub_key, &pub_key_len);
+	LOG_INF("optrust_ecc_gen_keys_ext res: %d, took %d ms", res, milliseconds_spent);
+
 	LOG_INF("Example finished");
 }
