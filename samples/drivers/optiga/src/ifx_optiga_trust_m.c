@@ -124,6 +124,41 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx)
 	return events[0].signal->result;
 }
 
+/* Must be synced to OPTIGA_IGNORE_HIBERNATE in crypto_optiga.h */
+#define OPTIGA_TRUSTM_WAKE_LOCK_IDX_START 8
+#define OPTIGA_TRUSTM_WAKE_LOCK_IDX_END 32
+
+int optrust_wake_lock_acquire(struct optrust_ctx *ctx, int *token)
+{
+	__ASSERT(ctx != NULL && token != NULL, "No NULL parameters allowed");
+
+	int session = OPTIGA_TRUSTM_WAKE_LOCK_IDX_START;
+	for(; session < OPTIGA_TRUSTM_WAKE_LOCK_IDX_END; session++) {
+		bool acquired = optiga_session_acquire(ctx->dev, session);
+		if(acquired) {
+			/* found free slot */
+			break;
+		}
+	}
+
+	if (session == OPTIGA_TRUSTM_WAKE_LOCK_IDX_END) {
+		/* No free session contexts */
+		return -EBUSY;
+	}
+
+	*token = session;
+	return 0;
+}
+
+void optrust_wake_lock_release(struct optrust_ctx *ctx, int token)
+{
+	__ASSERT(ctx != NULL, "No NULL parameters allowed");
+	__ASSERT(token >= OPTIGA_TRUSTM_WAKE_LOCK_IDX_START
+		&& token < OPTIGA_TRUSTM_WAKE_LOCK_IDX_END, "Token invalid");
+
+	optiga_session_release(ctx->dev, token);
+}
+
 #define OPTIGA_TRUSTM_SESSIONS 4
 static const u16_t optiga_trustm_sessions[OPTIGA_TRUSTM_SESSIONS] = {
 	0xE100,
@@ -165,6 +200,25 @@ int optrust_session_release(struct optrust_ctx *ctx, u16_t oid)
 	/* Invalid OID */
 	return -EINVAL;
 }
+
+int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *psk, size_t psk_len)
+{
+	__ASSERT(ctx != NULL && psk != NULL, "No NULL parameters allowed");
+
+	/* Tell driver to enable shielded connection */
+	int res = optiga_start_shield(ctx->dev, psk, psk_len);
+	if (res != 0) {
+		return res;
+	}
+
+	/* Submit a dummy APDU to trigger an immediate handshake */
+	u8_t dummy = 0;
+	size_t dummy_len = 1;
+	/* If that APDU fails, it's because shielded connection was not enabled properly */
+	return optrust_data_get(ctx, 0xE0C2, 0, &dummy, &dummy_len);
+}
+
+
 
 #define OPTIGA_GET_DATA_CMD_LEN 10
 int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)

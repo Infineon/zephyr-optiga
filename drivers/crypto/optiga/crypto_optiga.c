@@ -19,7 +19,6 @@ LOG_MODULE_REGISTER(optiga);
 #define OPTIGA_SHIELD_STACK_ADDITION (64)
 
 // determined by experiment
-#define OPTIGA_STACK_SIZE (512+256 + OPTIGA_SHIELD_STACK_ADDITION)
 #define OPTIGA_STACK_SIZE (512+256 + 128 + OPTIGA_SHIELD_STACK_ADDITION)
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
@@ -377,6 +376,7 @@ static void optiga_hibernate(struct device *dev)
 	atomic_t reservations = atomic_get(&data->session_reservations);
 	/* Check for wake locks preventing hibernate */
 	if (reservations & ~OPTIGA_IGNORE_HIBERNATE_MASK) {
+		LOG_INF("Wake-lock prevents Hibernate");
 		return;
 	}
 

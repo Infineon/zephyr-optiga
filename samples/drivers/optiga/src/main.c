@@ -68,8 +68,8 @@ void main(void)
 
 	LOG_INF("set platform binding secret res: %d, took %d ms", res, milliseconds_spent);
 
-	res = optiga_start_shield(dev, psk, 64);
-	LOG_INF("optiga_start_shield res: %d, took %d ms", res, 0);
+	res = optrust_shielded_connection_psk_start(&ctx, psk, 64);
+	LOG_INF("optrust_shielded_connection_psk_start res: %d, took %d ms", res, 0);
 
 	/* read co-processor UID */
 	cert_len = CERT_BUFFER_LEN;
@@ -176,6 +176,13 @@ void main(void)
 	/* Release session to do full shutdown again */
 	res = optrust_session_release(&ctx, oid);
 	LOG_INF("optrust_session_release res: %d", res);
+
+	int wake_token;
+	res = optrust_wake_lock_acquire(&ctx, &wake_token);
+	LOG_INF("optrust_wake_lock_acquire res: %d", res);
+	k_sleep(10000);
+
+	optrust_wake_lock_release(&ctx, wake_token);
 
 	LOG_INF("Example finished");
 }

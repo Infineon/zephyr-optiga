@@ -39,6 +39,23 @@ int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, si
  */
 void optrust_deinit(struct optrust_ctx *ctx);
 
+
+/**
+ * @brief Request a wake-lock token
+ * @param ctx Context to use
+ * @param token Wake-lock token, to later release the wake lock again
+ * @return 0 on success, error code otherwise
+ */
+int optrust_wake_lock_acquire(struct optrust_ctx *ctx, int *token);
+
+/**
+ * @brief Return a wake-lock token
+ * @param ctx Context to use
+ * @param token Wake-lock token to release
+ * @return 0 on success, error code otherwise
+ */
+void optrust_wake_lock_release(struct optrust_ctx *ctx, int token);
+
 /**
  * @brief Request a session context for exclusive use
  * @param oid Returned OID of the assigned session context
@@ -54,17 +71,12 @@ int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid);
 int optrust_session_release(struct optrust_ctx *ctx, u16_t oid);
 
 /**
- * @brief Initialize the Trust M for shielded connection
+ * @brief Start shielded connection to Trust M using a pre-shared key
+ * @param psk Pre shared key
+ * @param psk_len Length of psk
  * @return 0 on success, error code otherwise
  */
-int optrust_shielded_connection_init(struct optrust_ctx *ctx, const u8_t *psk, size_t psk_len);
-
-/**
- * @brief Enable or disable shielded connection for following commands
- * @enable If true shielded connection is enabled, otherwise disabled
- * @return 0 on success, error code otherwise
- */
-int optrust_shielded_connection_enable(struct optrust_ctx *ctx, bool enable);
+int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *psk, size_t psk_len);
 
 /**
  * @brief Read data from a data object in the OPTIGA
