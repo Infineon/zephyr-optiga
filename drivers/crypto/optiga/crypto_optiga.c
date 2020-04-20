@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(optiga);
 
 // determined by experiment
 #define OPTIGA_STACK_SIZE (512+256 + OPTIGA_SHIELD_STACK_ADDITION)
+#define OPTIGA_STACK_SIZE (512+256 + 128 + OPTIGA_SHIELD_STACK_ADDITION)
 // TODO(chr): make Kconfig tunable
 #define OPTIGA_THREAD_PRIORITY 1
 #define OPTIGA_MAX_RESET 3
