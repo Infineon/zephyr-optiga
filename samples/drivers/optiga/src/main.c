@@ -235,5 +235,29 @@ void main(void)
 	LOG_INF("optrust_ecc_verify_ext res: %d, took %d ms", res, milliseconds_spent);
 
 
+	time_stamp = k_uptime_get();
+
+	/* Acquire temporary session context */
+	u16_t tmp_oid = 0;
+	res = optrust_session_acquire(&ctx, &tmp_oid);
+	if (res != 0) {
+		LOG_ERR("Failed to request session context");
+		return;
+	}
+
+	/* Generate ECC key pair */
+	res = optrust_ecdh_calc_oid(&ctx,
+					(u16_t)0xE0F0, /* Device specific key */
+					OPTRUST_ALGORITHM_NIST_P256,
+					verify_test_key, OPTRUST_NIST_P256_PUB_KEY_LEN,
+					tmp_oid);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_ecc_verify_ext res: %d, took %d ms", res, milliseconds_spent);
+
+	/* Release temporary session context again */
+	res = optrust_session_release(&ctx, tmp_oid);
+
+
 	LOG_INF("Example finished");
 }

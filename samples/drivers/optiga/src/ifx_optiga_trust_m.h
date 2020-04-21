@@ -226,19 +226,20 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t shared_secret_oid,
 				u8_t *key, size_t key_len);
 
 /**
- * @brief Perform an ECDH operation on a shared secret to derive a key and store it in a session context
+ * @brief Perform an ECDH operation on a public and private key to derive a shared secret and store it in a session context
  *
  * @param ctx Command context to use
- * @param shared_secret_oid OID of the shared secret to use for key derivation
- * @param deriv_data Shared secret derivation data
- * @param deriv_data_len Length of deriv_data
- * @param key_len Length of key
- * @param key_oid OID to store the derived key
+ * @param sec_key_oid OID of the private key to use for key derivation
+ * @param alg Algorithm identifier of the Public key, must be OPTRUST_ALGORITHM_NIST_P256 or OPTRUST_ALGORITHM_NIST_P383
+ * @param pub_key Public key
+ * @param pub_key_len Length of pub_key
+ * @param shared_secret_oid OID to store the derived key
  * @return 0 on success, error code otherwise
  */
-int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t shared_secret_oid,
-				const u8_t *deriv_data, size_t deriv_data_len,
-				size_t key_len, u16_t key_oid);
+int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
+				enum OPTRUST_ALGORITHM alg,
+				const u8_t *pub_key, size_t pub_key_len,
+				u16_t shared_secret_oid);
 
 /**
  * @brief Read metadata from a data object
