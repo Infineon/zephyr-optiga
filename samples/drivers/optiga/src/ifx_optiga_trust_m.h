@@ -175,6 +175,24 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
 
 /**
+ * @brief Verify a signature using a public key provided by the host
+ *
+ * @param ctx Command context to use
+ * @param alg Algorithm identifier of the public key
+ * @param pub_key Output buffer for the public key
+ * @param pub_key_len length of pub_key, contains the length of the public key
+ * @param digest Digest to verify the signature of
+ * @param digest_len Length of digest
+ * @param signature Signature to verify
+ * @param signature_len Length of signature
+ * @return 0 if the signature matches, error code otherwise
+ */
+int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
+				const u8_t *pub_key, size_t pub_key_len,
+				const u8_t *digest, size_t digest_len,
+				const u8_t *signature, size_t signature_len);
+
+/**
  * @brief Verify a signature using a public key in the OPTIGA
  *
  * @param ctx Command context to use
@@ -221,24 +239,6 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t shared_secret_oid,
 int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t shared_secret_oid,
 				const u8_t *deriv_data, size_t deriv_data_len,
 				size_t key_len, u16_t key_oid);
-
-/**
- * @brief Verify a signature using a public key provided by the host
- *
- * @param ctx Command context to use
- * @param alg Algorithm identifier of the public key
- * @param pub_key Output buffer for the public key
- * @param pub_key_len length of pub_key, contains the length of the public key
- * @param digest Digest to verify the signature of
- * @param digest_len Length of digest
- * @param signature Signature to verify
- * @param signature_len Length of signature
- * @return 0 if the signature matches, error code otherwise
- */
-int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
-				const u8_t *pub_key, size_t pub_key_len,
-				const u8_t *digest, size_t digest_len,
-				const u8_t *signature, size_t signature_len);
 
 /**
  * @brief Read metadata from a data object

@@ -454,6 +454,130 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 	return 0;
 }
 
+int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
+				const u8_t *pub_key, size_t pub_key_len,
+				const u8_t *digest, size_t digest_len,
+				const u8_t *signature, size_t signature_len)
+{
+	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
+	// TODO(chr): adapt length check
+	__ASSERT(ctx->apdu_buf_len >= (digest_len + 15), "APDU buffer too small");
+
+	switch(alg) {
+		case OPTRUST_ALGORITHM_NIST_P256:
+			if (pub_key_len != OPTRUST_NIST_P256_PUB_KEY_LEN) {
+				return -EINVAL;
+			}
+			break;
+		case OPTRUST_ALGORITHM_NIST_P384:
+			if (pub_key_len != OPTRUST_NIST_P384_PUB_KEY_LEN) {
+				return -EINVAL;
+			}
+			break;
+		default:
+			return -EINVAL;
+	}
+
+	u8_t *tx_buf = ctx->apdu_buf;
+	tx_buf += OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	const u8_t *tx_buf_in_data = tx_buf;
+
+	/* Digest */
+	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
+
+	/* Second parameter */
+	*tx_buf = 0x02;
+	tx_buf++;
+
+	/* we don't know the length of the signature data and public key yet, remember the position */
+	u8_t * const sig_len_field = tx_buf;
+	tx_buf += 2;
+
+	/* Signature */
+	__ASSERT((signature_len % 2) == 0, "Signature must have even number of bytes");
+	size_t asn1_sig_len = ctx->apdu_buf_len - (ctx->apdu_buf - tx_buf);
+
+	bool success = ecdsa_rs_to_asn1_integers(signature, signature + signature_len/2, signature_len/2, tx_buf, &asn1_sig_len);
+	if(!success) {
+		LOG_ERR("Couldn't encode signature");
+		return -EINVAL;
+	}
+	tx_buf += asn1_sig_len;
+
+	if(digest_len + 11 + asn1_sig_len > OPTIGA_TRUSTM_IN_LEN_MAX) {
+		LOG_ERR("Overflow in APDU header");
+		return -EINVAL;
+	}
+
+	/* length of signature is known now */
+	sys_put_be16(asn1_sig_len, sig_len_field);
+
+	/* Algorithm identifier of public key */
+	tx_buf += set_tlv_u8(tx_buf, 0x05, alg);
+
+	/* Public key Tag */
+	*tx_buf = 0x06;
+	tx_buf++;
+
+	/* Public key Length */
+	sys_put_be16(pub_key_len + 4, tx_buf); /* ASN.1 Tag + Length + Unused bits field */
+	tx_buf += 2;
+
+	/* Public key Value, encoded as DER BITSTRING */
+	*tx_buf = 0x03; /* DER BITSTRING Tag */
+	tx_buf++;
+
+	*tx_buf = pub_key_len + 2; /* DER BITSTRING Length, includes "unused bits" byte */
+	tx_buf++;
+
+	*tx_buf = 0; /* No unused bits */
+	tx_buf++;
+
+	*tx_buf = 0x04; /* Compressed point format */
+	tx_buf++;
+
+	/* Public key */
+	memcpy(tx_buf, pub_key, pub_key_len);
+	tx_buf += pub_key_len;
+
+	/* length of whole apdu is also known now */
+	cmds_set_apdu_header(ctx->apdu_buf,
+				OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
+				0x11, /* ECDSA FIPS 186-3 w/o hash */
+				tx_buf - tx_buf_in_data /* Length of the Tx APDU */
+			);
+
+	/* Setup APDU for cmd queue */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
+	ctx->apdu.rx_buf = tx_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+
+	int result_code = cmds_submit_apdu(ctx);
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("SetDataObject Error Code: %d", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+
+	u8_t sta = 0;
+	u16_t out_len = 0;
+	cmds_get_apdu_header(rx_buf, &sta, &out_len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+	__ASSERT(out_len == 0, "Unexpected data returned");
+
+	return 0;
+}
+
 int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
