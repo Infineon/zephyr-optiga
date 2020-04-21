@@ -686,10 +686,13 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 	u16_t out_len = 0;
 	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
 
+	LOG_HEXDUMP_INF(rx_buf, out_len, "RX APDU");
+
 	/* Failed APDUs should never reach this layer */
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 
 	__ASSERT(((OPTIGA_TRUSTM_IN_DATA_OFFSET + out_len) == rx_len), "Invalid length in APDU");
+	// TODO(chr): more robust ASN.1 decoding
 
 	u8_t tag = 0;
 	u16_t len = 0;
@@ -707,8 +710,22 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EIO;
 	}
 
+	/* Secret key is encoded as DER OCTET STRING */
+
+	/* ASN.1 encoding overhead are 2 bytes */
+	if (len != (*sec_key_len + 2)) {
+		/* Unexpected length */
+		return -EIO;
+	}
+
+	__ASSERT(sec_key_asn1[0] == 0x04, "Not an DER OCTECT STRING");
+	__ASSERT(sec_key_asn1[1] == *sec_key_len, "Length mismatch");
+
+	sec_key_asn1 += 2;
+	memcpy(sec_key, sec_key_asn1, *sec_key_len);
+
 	/* Parse public key */
-	rx_buf = sec_key_asn1 + len;
+	rx_buf = sec_key_asn1 + *sec_key_len;
 	out_len -= len;
 
 	u8_t *pub_key_asn1 = NULL;
@@ -723,7 +740,22 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EIO;
 	}
 
-	//TODO(chr): ASN.1 parsing of secret/public key
+	/* Public key is encoded as DER BIT STRING */
+
+	/* ASN.1 encoding overhead are 4 bytes */
+	if (len != (*pub_key_len + 4)) {
+		/* Unexpected length */
+		return -EIO;
+	}
+
+	__ASSERT(pub_key_asn1[0] == 0x03, "Not an DER BIT STRING");
+	__ASSERT(pub_key_asn1[1] == (*pub_key_len + 2), "Length mismatch");
+	__ASSERT(pub_key_asn1[2] == 0, "Unused bits encoding not supported");
+	__ASSERT(pub_key_asn1[3] == 0x04, "Not a compressed point");
+
+	pub_key_asn1 += 4; /* 1 byte TAG, 1 byte Length, 1 byte for unused bits, 1 for "compressed point" indicator */
+	memcpy(pub_key, pub_key_asn1, *pub_key_len);
+
 	return 0;
 }
 

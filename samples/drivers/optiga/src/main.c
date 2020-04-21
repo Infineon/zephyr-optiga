@@ -156,6 +156,7 @@ void main(void)
 	u8_t hash_buf[OPTRUST_SHA256_DIGEST_LEN] = {0};
 	size_t hash_buf_len = OPTRUST_SHA256_DIGEST_LEN;
 
+#if 0
 	/* Acquire session context to force Hibernation */
 	u16_t oid = 0;
 	res = optrust_session_acquire(&ctx, &oid);
@@ -183,6 +184,7 @@ void main(void)
 	k_sleep(10000);
 
 	optrust_wake_lock_release(&ctx, wake_token);
+#endif
 
 	u8_t sec_key[OPTRUST_NIST_P256_SEC_KEY_LEN] = {0};
 	size_t sec_key_len = OPTRUST_NIST_P256_SEC_KEY_LEN;
@@ -193,6 +195,8 @@ void main(void)
 	/* Generate ECC key pair */
 	res = optrust_ecc_gen_keys_ext(&ctx, OPTRUST_ALGORITHM_NIST_P256, sec_key, &sec_key_len, pub_key, &pub_key_len);
 	LOG_INF("optrust_ecc_gen_keys_ext res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(sec_key, sec_key_len, "Secret key: ");
+	LOG_HEXDUMP_INF(pub_key, pub_key_len, "Public key: ");
 
 	LOG_INF("Example finished");
 }
