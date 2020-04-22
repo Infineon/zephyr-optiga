@@ -120,6 +120,54 @@ static bool get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** val
 	return true;
 }
 
+
+
+#define DER_TAG_BITSTRING 0x03
+/* Tag + Length + Unused bits + Compressed point marker */
+#define DER_BITSTRING_PK_OVERHEAD 4
+
+/**
+ * @brief Store a raw public key as a compressed point in ASN.1 DER BITSTRING encoding
+ * @param buf Output buffer for the encoded data
+ * @param buf_len Length of buf
+ * @param pub_key Raw public key to encode
+ * @param pub_key_len Length of pub_key in bytes
+ * @return Number of added bytes, 0 on error
+ * @note This function can only encode complete bytes and not single bits.
+ *       It can also only encode a maximum of 125 bytes.
+ */
+static size_t set_pub_key_as_bitstring(u8_t *buf, size_t buf_len, const u8_t *pub_key, size_t pub_key_len)
+{
+	if (pub_key_len > 125) {
+		/* Length field overflow */
+		return 0;
+	}
+
+	if ((pub_key_len + DER_BITSTRING_PK_OVERHEAD) > buf_len) {
+		/* Output buffer overflow */
+		return 0;
+	}
+
+	*buf = DER_TAG_BITSTRING;
+	buf++;
+
+	/* Length including "unused bits" value and compressed point marker */
+	*buf = pub_key_len + 2;
+	buf++;
+
+	/* Unused bits, only 0 supported here */
+	*buf = 0;
+	buf++;
+
+	/* Compressed point marker */
+	*buf = 0x04;
+	buf++;
+
+	/* actual data */
+	memcpy(buf, pub_key, pub_key_len);
+	return pub_key_len + DER_BITSTRING_PK_OVERHEAD;
+}
+
 static size_t cmds_set_apdu_header(u8_t *apdu_start, enum OPTIGA_TRUSTM_CMD cmd, u8_t param, u16_t in_len)
 {
 	apdu_start[OPTIGA_TRUSTM_CMD_OFFSET] = cmd;
@@ -524,26 +572,22 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 	*tx_buf = 0x06;
 	tx_buf++;
 
-	/* Public key Length */
-	sys_put_be16(pub_key_len + 4, tx_buf); /* ASN.1 Tag + Length + Unused bits field */
+	/* Public key Length, not known yet */
+	u8_t *pub_key_len_field = tx_buf;
 	tx_buf += 2;
 
-	/* Public key Value, encoded as DER BITSTRING */
-	*tx_buf = 0x03; /* DER BITSTRING Tag */
-	tx_buf++;
+	/* Public key Value */
+	size_t remaining_len = ctx->apdu_buf_len - (tx_buf - ctx->apdu_buf);
+	size_t pub_key_asn1_len = set_pub_key_as_bitstring(tx_buf, remaining_len, pub_key, pub_key_len);
+	if (pub_key_asn1_len == 0) {
+		/* Encoding error */
+		return -EINVAL;
+	}
 
-	*tx_buf = pub_key_len + 2; /* DER BITSTRING Length, includes "unused bits" byte */
-	tx_buf++;
+	tx_buf += pub_key_asn1_len;
 
-	*tx_buf = 0; /* No unused bits */
-	tx_buf++;
-
-	*tx_buf = 0x04; /* Compressed point format */
-	tx_buf++;
-
-	/* Public key */
-	memcpy(tx_buf, pub_key, pub_key_len);
-	tx_buf += pub_key_len;
+	/* Public key length know now */
+	sys_put_be16(pub_key_asn1_len, pub_key_len_field);
 
 	/* length of whole apdu is also known now */
 	cmds_set_apdu_header(ctx->apdu_buf,
@@ -1019,26 +1063,21 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	*tx_buf = 0x06;
 	tx_buf++;
 
-	/* Public key Length */
-	sys_put_be16(pub_key_len + 4, tx_buf); /* ASN.1 Tag + Length + Unused bits field */
+	/* Public key Length, not known yet */
+	u8_t *pub_key_len_field = tx_buf;
 	tx_buf += 2;
 
-	/* Public key Value, encoded as DER BITSTRING */
-	*tx_buf = 0x03; /* DER BITSTRING Tag */
-	tx_buf++;
+	/* Public key Value */
+	size_t remaining_len = ctx->apdu_buf_len - (tx_buf - ctx->apdu_buf);
+	size_t pub_key_asn1_len = set_pub_key_as_bitstring(tx_buf, remaining_len, pub_key, pub_key_len);
+	if (pub_key_asn1_len == 0) {
+		/* Encoding error */
+		return -EINVAL;
+	}
+	tx_buf += pub_key_asn1_len;
 
-	*tx_buf = pub_key_len + 2; /* DER BITSTRING Length, includes "unused bits" byte */
-	tx_buf++;
-
-	*tx_buf = 0; /* No unused bits */
-	tx_buf++;
-
-	*tx_buf = 0x04; /* Compressed point format */
-	tx_buf++;
-
-	/* Public key */
-	memcpy(tx_buf, pub_key, pub_key_len);
-	tx_buf += pub_key_len;
+	/* Public key length know now */
+	sys_put_be16(pub_key_asn1_len, pub_key_len_field);
 
 	/* OID of Shared Secret */
 	tx_buf += set_tlv_u16(tx_buf, 0x08, shared_secret_oid);
