@@ -578,6 +578,8 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 					/* Forward OPTIGA error code to users, mark APDU as handled */
 					k_poll_signal_raise(&apdu->finished, optiga_err_code);
 					apdu = NULL;
+
+					state = WORKER_IDLE;
 					break;
 				}
 
