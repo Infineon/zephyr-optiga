@@ -258,6 +258,16 @@ void main(void)
 	/* Release temporary session context again */
 	res = optrust_session_release(&ctx, tmp_oid);
 
+	/* Get some random data */
+	cert_len = 8;
+
+	time_stamp = k_uptime_get();
+	res = optrust_rng_gen_ext(&ctx, OPTRUST_RNG_TYPE_TRNG, cert_buf, cert_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_HEXDUMP_INF(cert_buf, cert_len, "Random data: ");
+
+
 
 	LOG_INF("Example finished");
 }

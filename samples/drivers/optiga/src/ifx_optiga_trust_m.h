@@ -205,6 +205,21 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
  */
 int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
 
+enum OPTRUST_RNG_TYPE {
+	OPTRUST_RNG_TYPE_TRNG	= 0x00,
+	OPTRUST_RNG_TYPE_DRNG	= 0x01,
+};
+
+/**
+ * @brief Generate random bytes
+ * @param ctx Command context to use
+ * @param type Type of the RNG to use
+ * @param rnd Output buffer for the random bytes
+ * @param rnd_len Size of the output buffer
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
+
 /*
  *  The following APIs are drafts for now
  */
@@ -290,20 +305,5 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
 int optrust_sha256_oid(struct optrust_ctx *ctx,
 				u16_t oid, size_t offs, size_t len,
 				u8_t *digest, size_t *digest_len);
-
-enum OPTRUST_RNG_TYPE {
-    OPTRUST_RNG_TYPE_TRNG	= 0x00,
-    OPTRUST_RNG_TYPE_DRNG	= 0x01,
-};
-
-/**
- * @brief Generate random bytes
- * @param ctx Command context to use
- * @param type Type of the RNG to use
- * @param rnd Output buffer for the random bytes
- * @param rnd_len Size of the output buffer
- * @return 0 on success, error code otherwise
- */
-int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */

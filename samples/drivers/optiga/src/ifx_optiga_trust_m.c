@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(cmds_m);
 enum OPTIGA_TRUSTM_CMD {
 	OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT =	0x81,
 	OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT =	0x82,
+	OPTIGA_TRUSTM_CMD_GET_RANDOM =		0x8C,
 	OPTIGA_TRUSTM_CMD_CALC_HASH =		0xB0,
 	OPTIGA_TRUSTM_CMD_CALC_SIGN =		0xB1,
 	OPTIGA_TRUSTM_CMD_VERIFY_SIGN =		0xB2,
@@ -1116,5 +1117,62 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 	__ASSERT(out_len == 0, "Unexpected data returned");
 
+	return 0;
+}
+
+int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len)
+{
+	__ASSERT(ctx != NULL && rnd != NULL, "No NULL parameters allowed");
+	__ASSERT(rnd_len > 0, "Can't generate 0 random bytes");
+
+	if (rnd_len > 0x100) {
+		/* Requesting too many bytes */
+		return -EINVAL;
+	}
+
+	u8_t *tx_buf = ctx->apdu_buf;
+	tx_buf += cmds_set_apdu_header(tx_buf,
+				OPTIGA_TRUSTM_CMD_GET_RANDOM,
+				(u8_t) type, /* Param */
+				2 /* Length of the Tx APDU */
+				);
+	u16_t request_len = rnd_len < 8 ? 8 : (u16_t) rnd_len;
+	/* Length of random stream */
+	sys_put_be16(request_len, tx_buf);
+	tx_buf += 2;
+
+	/* Setup APDU for cmd queue */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
+	ctx->apdu.rx_buf = tx_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+
+	int result_code = cmds_submit_apdu(ctx);
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("GetRandom Error Code: %d", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+
+	u8_t sta = 0;
+	u16_t out_len = 0;
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+
+	if (out_len != request_len) {
+		/* Unexpected amount of data */
+		return -EIO;
+	}
+
+	memcpy(rnd, rx_buf, rnd_len);
 	return 0;
 }
