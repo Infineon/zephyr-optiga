@@ -143,11 +143,19 @@ void main(void)
 	u8_t pub_key[OPTRUST_NIST_P256_PUB_KEY_LEN] = {0};
 	size_t pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
 
+	/* Acquire session context */
+	u16_t priv_key_oid = 0;
+	res = optrust_session_acquire(&ctx, &priv_key_oid);
+	if (res != 0) {
+		LOG_ERR("Failed to request session context");
+		return;
+	}
+
 	time_stamp = k_uptime_get();
 
 	/* Generate an ECC keypair and export the public key */
-	res = optrust_ecc_gen_keys_oid(&ctx, 0xE100, OPTRUST_ALGORITHM_NIST_P256,
-		OPTRUST_KEY_USAGE_FLAG_SIGN, pub_key, &pub_key_len);
+	res = optrust_ecc_gen_keys_oid(&ctx, priv_key_oid, OPTRUST_ALGORITHM_NIST_P256,
+		OPTRUST_KEY_USAGE_FLAG_SIGN | OPTRUST_KEY_USAGE_FLAG_KEY_AGREE, pub_key, &pub_key_len);
 
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 	LOG_INF("ifx_optiga_trust_gen_key_ecdsa res: %d, took %d ms", res, milliseconds_spent);
@@ -156,6 +164,7 @@ void main(void)
 	u8_t hash_buf[OPTRUST_SHA256_DIGEST_LEN] = {0};
 	size_t hash_buf_len = OPTRUST_SHA256_DIGEST_LEN;
 
+// TODO(chr): find out why two consecutive shared secret calculations fail
 #if 0
 	/* Acquire session context to force Hibernation */
 	u16_t oid = 0;
@@ -237,6 +246,22 @@ void main(void)
 
 	time_stamp = k_uptime_get();
 
+#if 0
+	/* Generate Shared Secret key pair and export to host */
+	u8_t shared_secret[64] = {0};
+	size_t shared_secret_len = 64;
+	//TODO(chr): fix testcase, use working key
+	time_stamp = k_uptime_get();
+	res = optrust_ecdh_calc_ext(&ctx,
+					priv_key_oid,
+					OPTRUST_ALGORITHM_NIST_P256,
+					verify_test_key, OPTRUST_NIST_P256_PUB_KEY_LEN,
+					shared_secret, &shared_secret_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_ecdh_calc_ext res: %d, took %d ms", res, milliseconds_spent);
+
+#endif
 	/* Acquire temporary session context */
 	u16_t tmp_oid = 0;
 	res = optrust_session_acquire(&ctx, &tmp_oid);
@@ -245,15 +270,16 @@ void main(void)
 		return;
 	}
 
-	/* Generate ECC key pair */
+	/* Generate Shared Secret key pair and store in OID */
+	//TODO(chr): fix testcase, use working key
 	res = optrust_ecdh_calc_oid(&ctx,
-					(u16_t)0xE0F0, /* Device specific key */
+					priv_key_oid,
 					OPTRUST_ALGORITHM_NIST_P256,
 					verify_test_key, OPTRUST_NIST_P256_PUB_KEY_LEN,
 					tmp_oid);
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 
-	LOG_INF("optrust_ecc_verify_ext res: %d, took %d ms", res, milliseconds_spent);
+	LOG_INF("optrust_ecdh_calc_oid res: %d, took %d ms", res, milliseconds_spent);
 
 	/* Release temporary session context again */
 	res = optrust_session_release(&ctx, tmp_oid);
