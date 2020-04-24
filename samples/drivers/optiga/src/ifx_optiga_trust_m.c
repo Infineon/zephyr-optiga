@@ -1161,7 +1161,6 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	/* OID of Private Key */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
 
-	// TODO(chr): code duplication with optrust_ecdsa_verify_ext
 	/* Algorithm Identifier */
 	tx_buf += set_tlv_u8(tx_buf, 0x05, alg);
 
@@ -1182,7 +1181,7 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	}
 	tx_buf += pub_key_asn1_len;
 
-	/* Public key length know now */
+	/* Public key length known now */
 	sys_put_be16(pub_key_asn1_len, pub_key_len_field);
 
 	/* OID of Shared Secret */

@@ -250,7 +250,6 @@ void main(void)
 	/* Generate Shared Secret key pair and export to host */
 	u8_t shared_secret[64] = {0};
 	size_t shared_secret_len = 64;
-	//TODO(chr): fix testcase, use working key
 	time_stamp = k_uptime_get();
 	res = optrust_ecdh_calc_ext(&ctx,
 					priv_key_oid,
@@ -262,6 +261,7 @@ void main(void)
 	LOG_INF("optrust_ecdh_calc_ext res: %d, took %d ms", res, milliseconds_spent);
 
 #endif
+
 	/* Acquire temporary session context */
 	u16_t tmp_oid = 0;
 	res = optrust_session_acquire(&ctx, &tmp_oid);
@@ -271,7 +271,6 @@ void main(void)
 	}
 
 	/* Generate Shared Secret key pair and store in OID */
-	//TODO(chr): fix testcase, use working key
 	res = optrust_ecdh_calc_oid(&ctx,
 					priv_key_oid,
 					OPTRUST_ALGORITHM_NIST_P256,
