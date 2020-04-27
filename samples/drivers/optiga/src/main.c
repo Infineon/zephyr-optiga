@@ -164,7 +164,6 @@ void main(void)
 	u8_t hash_buf[OPTRUST_SHA256_DIGEST_LEN] = {0};
 	size_t hash_buf_len = OPTRUST_SHA256_DIGEST_LEN;
 
-// TODO(chr): find out why two consecutive shared secret calculations fail
 #if 0
 	/* Acquire session context to force Hibernation */
 	u16_t oid = 0;
@@ -194,6 +193,20 @@ void main(void)
 
 	optrust_wake_lock_release(&ctx, wake_token);
 #endif
+
+	u8_t test_digest[OPTRUST_SHA256_DIGEST_LEN] = {0};
+	size_t test_digest_len = OPTRUST_SHA256_DIGEST_LEN;
+
+	time_stamp = k_uptime_get();
+
+	/* Hash some data */
+	res = optrust_sha256_ext(&ctx, psk, 64, test_digest, &test_digest_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_sha256_ext res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(test_digest, test_digest_len, "Hash: ");
+
+
 
 	u8_t sec_key[OPTRUST_NIST_P256_SEC_KEY_LEN] = {0};
 	size_t sec_key_len = OPTRUST_NIST_P256_SEC_KEY_LEN;
@@ -246,6 +259,7 @@ void main(void)
 
 	time_stamp = k_uptime_get();
 
+// TODO(chr): find out why two consecutive shared secret calculations fail
 #if 0
 	/* Generate Shared Secret key pair and export to host */
 	u8_t shared_secret[64] = {0};

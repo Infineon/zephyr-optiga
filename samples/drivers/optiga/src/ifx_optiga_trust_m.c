@@ -949,6 +949,83 @@ enum OPTIGA_TRUSTM_CALC_HASH_TAGS {
 	OPTIGA_TRUSTM_CALC_HASH_OID_FINAL_KEEP = 0x15,
 };
 
+int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_len,
+                       u8_t *digest, size_t *digest_len)
+{
+	__ASSERT(ctx != NULL && digest != NULL && digest_len != NULL && data != NULL, "No NULL parameters allowed");
+
+	if (data_len > (UINT16_MAX - 3)) {
+		/* Overflow in inData Length field */
+		return -EINVAL;
+	}
+
+	__ASSERT(ctx->apdu_buf_len >= (OPTIGA_TRUSTM_IN_DATA_OFFSET + 3 + data_len), "APDU input buffer too small");
+	__ASSERT(ctx->apdu_buf_len >= (OPTIGA_TRUSTM_IN_DATA_OFFSET + 3 + OPTRUST_SHA256_DIGEST_LEN), "APDU output buffer too small");
+
+	if (*digest_len < OPTRUST_SHA256_DIGEST_LEN) {
+		/* Output buffer too small */
+		return -EINVAL;
+	}
+
+	u8_t *tx_buf = ctx->apdu_buf;
+	tx_buf += cmds_set_apdu_header(tx_buf,
+				OPTIGA_TRUSTM_CMD_CALC_HASH,
+				OPTRUST_ALGORITHM_SHA256, /* Param */
+				3 + data_len /* Length of the Tx APDU */);
+
+	tx_buf += set_tlv(tx_buf, OPTIGA_TRUSTM_CALC_HASH_START_FINAL, data, data_len);
+
+	/* Setup APDU for cmd queue */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
+	ctx->apdu.rx_buf = tx_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+
+	int result_code = cmds_submit_apdu(ctx);
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("SetDataObject Error Code: %d", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+
+	u8_t sta = 0;
+	u16_t out_len = 0;
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
+
+	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_IN_DATA_OFFSET)) {
+		/* Invalid length */
+		return -EIO;
+	}
+
+	u8_t tag = 0;
+	u16_t len = 0;
+	u8_t *out_digest = NULL;
+	if (!get_tlv(rx_buf, out_len, &tag, &len, &out_digest)) {
+		/* Failed to parse result */
+		return -EIO;
+	}
+
+	if (tag != 0x01 && len != OPTRUST_SHA256_DIGEST_LEN ) {
+		/* Invalid data */
+		return -EIO;
+	}
+
+	memcpy(digest, out_digest, OPTRUST_SHA256_DIGEST_LEN);
+
+	return 0;
+}
+
 int optrust_sha256_oid(struct optrust_ctx *ctx,
 				u16_t oid, size_t offs, size_t len,
 				u8_t *digest, size_t *digest_len)
@@ -958,6 +1035,11 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 
 	if (offs > UINT16_MAX || len > UINT16_MAX) {
 		/* Overflow in Offset and Length field */
+		return -EINVAL;
+	}
+
+	if (*digest_len < OPTRUST_SHA256_DIGEST_LEN) {
+		/* Output buffer too small */
 		return -EINVAL;
 	}
 
@@ -980,11 +1062,11 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 	sys_put_be16(oid, tx_buf);
 	tx_buf += 2;
 
-	/* Offset */
+	/* Offset in OID */
 	sys_put_be16(offs, tx_buf);
 	tx_buf += 2;
 
-	/* Length */
+	/* Length of OID */
 	sys_put_be16(len, tx_buf);
 	tx_buf += 2;
 
@@ -1016,15 +1098,25 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
 
-	/* Skip Tag + Length */
-	rx_buf += 3;
-	out_len -= 3;
-
-	if (*digest_len < out_len) {
-		return -ENOMEM;
+	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_IN_DATA_OFFSET)) {
+		/* Invalid length */
+		return -EIO;
 	}
 
-	memcpy(digest, rx_buf, out_len);
+	u8_t tag = 0;
+	u16_t out_digest_len = 0;
+	u8_t *out_digest = NULL;
+	if (!get_tlv(rx_buf, out_len, &tag, &out_digest_len, &out_digest)) {
+		/* Failed to parse result */
+		return -EIO;
+	}
+
+	if (tag != 0x01 && out_digest_len != OPTRUST_SHA256_DIGEST_LEN ) {
+		/* Invalid data */
+		return -EIO;
+	}
+
+	memcpy(digest, out_digest, OPTRUST_SHA256_DIGEST_LEN);
 
 	return 0;
 }

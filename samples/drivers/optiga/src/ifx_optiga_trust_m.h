@@ -219,11 +219,6 @@ enum OPTRUST_RNG_TYPE {
  */
 int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
 
-/*
- *  The following APIs are drafts for now
- */
-
-
 /**
  * @brief Perform an ECDH operation on a public and private key to derive a shared secret and store it in a session context
  *
@@ -258,26 +253,6 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 				const u8_t *pub_key, size_t pub_key_len,
 				u16_t shared_secret_oid);
 
-/**
- * @brief Read metadata from a data object
- * @param ctx Command context to use
- * @param oid OID of the data object
- * @param data Output buffer for the data object
- * @param data_len Length of the output buffer, contains length of metadata afterwards
- * @return 0 on success, error code otherwise
- */
-int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t *data_len);
-
-/**
- * @brief Set metadata of a data object
- * @param ctx Command context to use
- * @param oid OID of the data object
- * @param data metadata to write
- * @param data_len length of data
- * @return 0 on success, error code otherwise
- */
-int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len);
-
 #define OPTRUST_SHA256_DIGEST_LEN 32
 
 /**
@@ -307,5 +282,32 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
 int optrust_sha256_oid(struct optrust_ctx *ctx,
 				u16_t oid, size_t offs, size_t len,
 				u8_t *digest, size_t *digest_len);
+
+/*
+ *  The following APIs are drafts for now
+ */
+
+
+/**
+ * @brief Read metadata from a data object
+ * @param ctx Command context to use
+ * @param oid OID of the data object
+ * @param data Output buffer for the data object
+ * @param data_len Length of the output buffer, contains length of metadata afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t *data_len);
+
+/**
+ * @brief Set metadata of a data object
+ * @param ctx Command context to use
+ * @param oid OID of the data object
+ * @param data metadata to write
+ * @param data_len length of data
+ * @return 0 on success, error code otherwise
+ */
+int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len);
+
+
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
