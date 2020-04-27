@@ -283,10 +283,6 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 				u16_t oid, size_t offs, size_t len,
 				u8_t *digest, size_t *digest_len);
 
-/*
- *  The following APIs are drafts for now
- */
-
 
 /**
  * @brief Read metadata from a data object
@@ -297,6 +293,11 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
  * @return 0 on success, error code otherwise
  */
 int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t *data_len);
+
+
+/*
+ *  The following APIs are drafts for now
+ */
 
 /**
  * @brief Set metadata of a data object

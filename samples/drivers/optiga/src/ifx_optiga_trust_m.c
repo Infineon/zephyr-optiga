@@ -391,6 +391,68 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 	return 0;
 }
 
+#define OPTIGA_GET_METADATA_CMD_LEN 6
+int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *len)
+{
+	__ASSERT(ctx != NULL && buf != NULL && len != NULL, "No NULL parameters allowed");
+	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_META_DATA_CMD_LEN, "APDU buffer too small");
+
+	u8_t *tx_buf = ctx->apdu_buf;
+	tx_buf += cmds_set_apdu_header(tx_buf,
+				OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
+				0x01, /* Read metadata */
+				0x02 /* Command len, see datasheet Table 8 */);
+
+	/* OID */
+	sys_put_be16(oid, tx_buf);
+	tx_buf += 2;
+
+	/*
+	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
+	 * we don't need the written data
+	 */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
+	ctx->apdu.rx_buf = ctx->apdu_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len;
+
+	int result_code = cmds_submit_apdu(ctx);
+
+	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
+		LOG_INF("GetDataObject Error Code: %d", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+
+	u8_t sta = 0;
+	u16_t out_len = 0;
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+
+	/* Ensure length of APDU and length of buffer match */
+	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
+		LOG_ERR("Incomplete APDU");
+		return -EIO;
+	}
+
+	if(out_len > *len) {
+		return -ENOMEM;
+	}
+
+	memcpy(buf, rx_buf, out_len);
+	*len = out_len;
+	return 0;
+}
+
+
 int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
 {
 	__ASSERT(ctx != NULL && buf != NULL, "No NULL parameters allowed");
