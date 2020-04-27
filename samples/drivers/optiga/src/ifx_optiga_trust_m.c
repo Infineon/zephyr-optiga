@@ -207,8 +207,30 @@ void optrust_deinit(struct optrust_ctx *ctx)
 {
 }
 
-static int cmds_submit_apdu(struct optrust_ctx *ctx)
+static int cmds_submit_apdu(struct optrust_ctx *ctx, const u8_t *apdu_end, enum OPTIGA_TRUSTM_CMD cmd, u8_t param)
 {
+	const u8_t *apdu_start = ctx->apdu_buf;
+	__ASSERT((apdu_start + OPTIGA_TRUSTM_IN_DATA_OFFSET)  <= apdu_end, "Invalid apdu_end pointer");
+
+	const size_t in_data_len = apdu_end - apdu_start - OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	if (in_data_len > U16_MAX) {
+		/* Overflow in inData field */
+		return -EINVAL;
+	}
+
+	cmds_set_apdu_header(ctx->apdu_buf, cmd, param, (u16_t) in_data_len);
+
+	/*
+	 * Setup APDU for cmd queue, reuse the apdu_buf for receiving,
+	 * we don't need the written data
+	 */
+	ctx->apdu.tx_buf = ctx->apdu_buf;
+	ctx->apdu.tx_len = apdu_end - apdu_start;
+	ctx->apdu.rx_buf = ctx->apdu_buf;
+	ctx->apdu.rx_len = ctx->apdu_buf_len;
+
+
 	optiga_enqueue_apdu(ctx->dev, &ctx->apdu);
 
 	struct k_poll_event events[1] = {
@@ -321,18 +343,14 @@ int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *p
 int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
 {
 	__ASSERT(ctx != NULL && buf != NULL && len != NULL, "No NULL parameters allowed");
-	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_DATA_CMD_LEN, "APDU buffer too small");
 
 	if (offs > U16_MAX || *len > U16_MAX) {
 		/* Prevent overflow in parameter encoding */
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
-				0x00, /* Read data */
-				0x06 /* Command len, see datasheet Table 8 */);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -346,19 +364,16 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 	sys_put_be16(*len, tx_buf);
 	tx_buf += 2;
 
-	/*
-	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
-	 * we don't need the written data
-	 */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = ctx->apdu_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len;
-
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("GetDataObject Error Code: %d", result_code);
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
+						0x00 /* Read data */);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("GetDataObject Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -395,31 +410,25 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *len)
 {
 	__ASSERT(ctx != NULL && buf != NULL && len != NULL, "No NULL parameters allowed");
-	__ASSERT(ctx->apdu_buf_len >= OPTIGA_GET_META_DATA_CMD_LEN, "APDU buffer too small");
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
-				0x01, /* Read metadata */
-				0x02 /* Command len, see datasheet Table 8 */);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
 	tx_buf += 2;
 
-	/*
-	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
-	 * we don't need the written data
-	 */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = ctx->apdu_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
+						0x01 /* Read metadata */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("GetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("GetDataObject Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -456,12 +465,6 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *
 int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
 {
 	__ASSERT(ctx != NULL && buf != NULL, "No NULL parameters allowed");
-	__ASSERT(ctx->apdu_buf_len >= (len + 8), "APDU buffer too small");
-
-	if(len + 4 > OPTIGA_TRUSTM_IN_LEN_MAX) {
-		LOG_ERR("Overflow in APDU header");
-		return -EINVAL;
-	}
 
 	if (offs > U16_MAX) {
 		/* Prevent overflow in parameter encoding */
@@ -471,12 +474,8 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 	const u8_t param = erase ? OPTIGA_TRUSTM_SET_DATA_OBJECT_ERASE_WRITE_DATA
 		: OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_DATA;
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
-				param, /* Param */
-				len + 4 /* Length of the Tx APDU */
-			);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -490,16 +489,17 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 	memcpy(tx_buf, buf, len);
 	tx_buf += len;
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
+						param /* Param */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("SetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("SetDataObject Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -509,18 +509,14 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
-	__ASSERT(ctx->apdu_buf_len >= (digest_len + 12), "APDU buffer too small");
-	if(digest_len + 8 > OPTIGA_TRUSTM_IN_LEN_MAX) {
+
+	if (digest_len + 8 > OPTIGA_TRUSTM_IN_LEN_MAX) {
 		LOG_ERR("Overflow in APDU header");
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_CALC_SIGN,
-				0x11, /* ECDSA FIPS 186-3 w/o hash */
-				digest_len + 8 /* Length of the Tx APDU */
-			);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest to be signed */
 	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
@@ -528,16 +524,17 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 	/* OID of signature key */
 	tx_buf += set_tlv_u16(tx_buf, 0x03, oid);
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_CALC_SIGN,
+						0x11 /* ECDSA FIPS 186-3 w/o hash */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("SetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("CalcSign Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -577,8 +574,6 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 				const u8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
-	// TODO(chr): adapt length check
-	__ASSERT(ctx->apdu_buf_len >= (digest_len + 15), "APDU buffer too small");
 
 	switch(alg) {
 		case OPTRUST_ALGORITHM_NIST_P256:
@@ -595,9 +590,8 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 			return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += OPTIGA_TRUSTM_IN_DATA_OFFSET;
-	const u8_t *tx_buf_in_data = tx_buf;
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest */
 	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
@@ -653,23 +647,17 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 	/* Public key length know now */
 	sys_put_be16(pub_key_asn1_len, pub_key_len_field);
 
-	/* length of whole apdu is also known now */
-	cmds_set_apdu_header(ctx->apdu_buf,
-				OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
-				0x11, /* ECDSA FIPS 186-3 w/o hash */
-				tx_buf - tx_buf_in_data /* Length of the Tx APDU */
-			);
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
+						0x11 /* ECDSA FIPS 186-3 w/o hash */);
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
-
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("SetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -694,10 +682,9 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
-	__ASSERT(ctx->apdu_buf_len >= (digest_len + 15), "APDU buffer too small");
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest */
 	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
@@ -706,7 +693,7 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 	*tx_buf = 0x02;
 	tx_buf++;
 
-	/* we don't know the lenght of the signature data yet, remember the position */
+	/* we don't know the length of the signature data yet, remember the position */
 	u8_t * const sig_len_field = tx_buf;
 	tx_buf += 2;
 
@@ -729,26 +716,20 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 	/* length of signature is known now */
 	sys_put_be16(asn1_sig_len, sig_len_field);
 
-	/* length of whole apdu is also known now */
-	cmds_set_apdu_header(ctx->apdu_buf,
-				OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
-				0x11, /* ECDSA FIPS 186-3 w/o hash */
-				digest_len + 11 + asn1_sig_len /* Length of the Tx APDU */
-			);
-
 	/* OID of Public Key Certificate */
 	tx_buf += set_tlv_u16(tx_buf, 0x04, oid);
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
+						0x11 /* ECDSA FIPS 186-3 w/o hash */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("SetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -793,11 +774,8 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
-				alg, /* Key algorithm */
-				0x09 /* Command len, see datasheet Table 19 */);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, oid);
@@ -805,19 +783,17 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	/* Key usage identifier */
 	tx_buf += set_tlv_u8(tx_buf, 0x02, key_usage);
 
-	/*
-	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
-	 * we don't need the written data
-	 */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = ctx->apdu_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
+						alg /* Key algorithm */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("GetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("GenKeyPair Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -860,8 +836,6 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
 		&& sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
-	// TODO(chr): compute needed buffer size
-	__ASSERT(ctx->apdu_buf_len >= 200, "APDU buffer too small");
 
 	switch(alg) {
         case OPTRUST_ALGORITHM_NIST_P256:
@@ -886,28 +860,23 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
-				alg, /* Key algorithm */
-				0x03 /* Command len, see datasheet Table 19 */);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Export key pair in plain */
 	tx_buf += set_tlv(tx_buf, 0x07, NULL, 0);
 
-	/*
-	 * Setup APDU for cmd queue, reuse the tx_buf for receiving,
-	 * we don't need the written data
-	 */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = ctx->apdu_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
+						alg /* Key algorithm */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("GetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("GenKeyPair Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -1022,31 +991,28 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
 	}
 
 	__ASSERT(ctx->apdu_buf_len >= (OPTIGA_TRUSTM_IN_DATA_OFFSET + 3 + data_len), "APDU input buffer too small");
-	__ASSERT(ctx->apdu_buf_len >= (OPTIGA_TRUSTM_IN_DATA_OFFSET + 3 + OPTRUST_SHA256_DIGEST_LEN), "APDU output buffer too small");
 
 	if (*digest_len < OPTRUST_SHA256_DIGEST_LEN) {
 		/* Output buffer too small */
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_CALC_HASH,
-				OPTRUST_ALGORITHM_SHA256, /* Param */
-				3 + data_len /* Length of the Tx APDU */);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	tx_buf += set_tlv(tx_buf, OPTIGA_TRUSTM_CALC_HASH_START_FINAL, data, data_len);
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_CALC_HASH,
+						OPTRUST_ALGORITHM_SHA256 /* Param */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("SetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("CalcHash Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -1105,12 +1071,8 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_CALC_HASH,
-                OPTRUST_ALGORITHM_SHA256, /* Param */
-				9 /* Length of the Tx APDU */
-			);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Tag */
 	*tx_buf = OPTIGA_TRUSTM_CALC_HASH_OID_START_FINAL;
@@ -1132,16 +1094,17 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 	sys_put_be16(len, tx_buf);
 	tx_buf += 2;
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_CALC_HASH,
+						OPTRUST_ALGORITHM_SHA256 /* Param */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("SetDataObject Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("CalcHash Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -1204,8 +1167,8 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 			return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Private Key */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
@@ -1236,22 +1199,17 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	/* Export Shared Secret */
 	tx_buf += set_tlv(tx_buf, 0x07, NULL, 0);
 
-	cmds_set_apdu_header(ctx->apdu_buf,
-				OPTIGA_TRUSTM_CMD_CALC_SSEC,
-				OPTIGA_TRUSTM_KEY_AGREEMENT_ECDH, /* Param */
-				tx_buf - ctx->apdu_buf -  OPTIGA_TRUSTM_IN_DATA_OFFSET/* Length of the Tx APDU */
-				);
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_CALC_SSEC,
+						OPTIGA_TRUSTM_KEY_AGREEMENT_ECDH /* Param */);
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
-
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("DeriveSSec Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("CalcSSec Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -1309,8 +1267,8 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 			return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Private Key */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
@@ -1341,22 +1299,17 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	/* OID of Shared Secret */
 	tx_buf += set_tlv_u16(tx_buf, 0x08, shared_secret_oid);
 
-	cmds_set_apdu_header(ctx->apdu_buf,
-				OPTIGA_TRUSTM_CMD_CALC_SSEC,
-				OPTIGA_TRUSTM_KEY_AGREEMENT_ECDH, /* Param */
-				tx_buf - ctx->apdu_buf - OPTIGA_TRUSTM_IN_DATA_OFFSET/* Length of the Tx APDU */
-				);
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_CALC_SSEC,
+						OPTIGA_TRUSTM_KEY_AGREEMENT_ECDH /* Param */);
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
-
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("DeriveSSec Error Code: 0x%02x", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("CalcSSec Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
@@ -1388,27 +1341,26 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 		return -EINVAL;
 	}
 
-	u8_t *tx_buf = ctx->apdu_buf;
-	tx_buf += cmds_set_apdu_header(tx_buf,
-				OPTIGA_TRUSTM_CMD_GET_RANDOM,
-				(u8_t) type, /* Param */
-				2 /* Length of the Tx APDU */
-				);
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
 	u16_t request_len = rnd_len < 8 ? 8 : (u16_t) rnd_len;
+
 	/* Length of random stream */
 	sys_put_be16(request_len, tx_buf);
 	tx_buf += 2;
 
-	/* Setup APDU for cmd queue */
-	ctx->apdu.tx_buf = ctx->apdu_buf;
-	ctx->apdu.tx_len = tx_buf - ctx->apdu_buf;
-	ctx->apdu.rx_buf = tx_buf;
-	ctx->apdu.rx_len = ctx->apdu_buf_len - ctx->apdu.tx_len;
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_GET_RANDOM,
+						(u8_t) type /* Param */);
 
-	int result_code = cmds_submit_apdu(ctx);
-
-	if(result_code != OPTIGA_STATUS_CODE_SUCCESS) {
-		LOG_INF("GetRandom Error Code: %d", result_code);
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("GetRandom Error Code: 0x%02x", result_code);
 		return -EIO;
 	}
 
