@@ -243,6 +243,39 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx, const u8_t *apdu_end, enum 
 	return events[0].signal->result;
 }
 
+/**
+ * @brief Check the header and length of an APDU in the buffer
+ * @param ctx Context too use
+ * @param out_len Contains the number of bytes in the outData field of the APDU afterwards
+ * @return Pointer to outData field of the APDU on success, NULL otherwise
+ */
+static u8_t* cmds_check_apdu(struct optrust_ctx *ctx, size_t *out_len)
+{
+	__ASSERT(ctx != NULL && out_len != NULL, "No NULL parameters allowed");
+
+	/* need at least the 4 bytes of response data */
+	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+
+	u8_t *rx_buf = ctx->apdu.rx_buf;
+
+	u8_t sta = 0;
+	u16_t len = 0;
+	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &len);
+
+	/* Failed APDUs should never reach this layer */
+	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+
+	/* Ensure length of APDU and length of buffer match */
+	if (len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
+		LOG_ERR("Incomplete APDU");
+		return NULL;
+	}
+
+	*out_len = len;
+
+	return rx_buf;
+}
+
 /* Must be synced to OPTIGA_IGNORE_HIBERNATE in crypto_optiga.h */
 #define OPTIGA_TRUSTM_WAKE_LOCK_IDX_START 8
 #define OPTIGA_TRUSTM_WAKE_LOCK_IDX_END 32
@@ -379,29 +412,20 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	/* Ensure length of APDU and length of buffer match */
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
-		LOG_ERR("Incomplete APDU");
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
 
-	if(out_len > *len) {
+	if (out_len > *len) {
+		/* Output buffer too small */
 		return -ENOMEM;
 	}
 
-	memcpy(buf, rx_buf, out_len);
+	memcpy(buf, out_data, out_len);
 	*len = out_len;
 	return 0;
 }
@@ -434,29 +458,19 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	/* Ensure length of APDU and length of buffer match */
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
-		LOG_ERR("Incomplete APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
 
 	if(out_len > *len) {
+		/* Output buffer too small */
 		return -ENOMEM;
 	}
 
-	memcpy(buf, rx_buf, out_len);
+	memcpy(buf, out_data, out_len);
 	*len = out_len;
 	return 0;
 }
@@ -503,6 +517,20 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 		return -EIO;
 	}
 
+	/* Still need to check return data */
+
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	if(out_len != 0) {
+		/* We don't expect any return data here */
+		return -EIO;
+	}
+
 	return 0;
 }
 
@@ -540,26 +568,15 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	/* Ensure length of APDU and length of buffer match */
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
-		LOG_ERR("Incomplete APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
 
 	/* decode to raw RS values */
-	bool success = asn1_to_ecdsa_rs(rx_buf, out_len, signature, signature_len);
+	bool success = asn1_to_ecdsa_rs(out_data, out_len, signature, signature_len);
 	if(!success) {
 		LOG_ERR("Failed to decode signature");
 		return -EIO;
@@ -663,18 +680,17 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-	__ASSERT(out_len == 0, "Unexpected data returned");
+	if (out_len != 0) {
+		/* Unexpected outData */
+		return -EIO;
+	}
 
 	return 0;
 }
@@ -735,18 +751,17 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-	__ASSERT(out_len == 0, "Unexpected data returned");
+	if (out_len != 0) {
+		/* Unexpected outData */
+		return -EIO;
+	}
 
 	return 0;
 }
@@ -799,32 +814,21 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	/* Ensure length of APDU and length of buffer match */
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
-		LOG_ERR("Incomplete APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
 
-	__ASSERT(rx_buf[0] == 0x02, "Received Key not a pub key");
+	__ASSERT(out_data[0] == 0x02, "Received Key not a pub key");
 
 	// TODO(chr): decide if we can skip ASN.1 decoding
 	/* the following decoding routine only works if the public key has a fixed length */
 	__ASSERT(out_len == (*pub_key_len + 7), "Assumption about pub key encoding was wrong");
-	rx_buf += 3; // skip tag and length
-	rx_buf += 4; // skip ASN.1 tag, length and 2 value bytes
-	memcpy(pub_key, rx_buf, *pub_key_len);
+	out_data += 3; // skip tag and length
+	out_data += 4; // skip ASN.1 tag, length and 2 value bytes
+	memcpy(pub_key, out_data, *pub_key_len);
 
 	return 0;
 }
@@ -882,22 +886,13 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+	size_t out_len = 0;
+	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-	size_t rx_len = ctx->apdu.rx_len;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	LOG_HEXDUMP_INF(rx_buf, out_len, "RX APDU");
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	__ASSERT(((OPTIGA_TRUSTM_IN_DATA_OFFSET + out_len) == rx_len), "Invalid length in APDU");
 	// TODO(chr): more robust ASN.1 decoding
 
 	u8_t tag = 0;
@@ -905,7 +900,7 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 	u8_t *sec_key_asn1 = NULL;
 
 	/* Parse secrect key */
-	bool res = get_tlv(rx_buf, out_len, &tag, &len, &sec_key_asn1);
+	bool res = get_tlv(out_data, out_len, &tag, &len, &sec_key_asn1);
 	if (!res) {
 		/* Failed to parse TLV data structure */
 		return -EIO;
@@ -931,11 +926,11 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 	memcpy(sec_key, sec_key_asn1, *sec_key_len);
 
 	/* Parse public key */
-	rx_buf = sec_key_asn1 + *sec_key_len;
+	out_data = sec_key_asn1 + *sec_key_len;
 	out_len -= len;
 
 	u8_t *pub_key_asn1 = NULL;
-	res = get_tlv(rx_buf, rx_len, &tag, &len, &pub_key_asn1);
+	res = get_tlv(out_data, out_len, &tag, &len, &pub_key_asn1);
 	if (!res) {
 		/* Failed to parse TLV data structure */
 		return -EIO;
@@ -1018,28 +1013,19 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
-
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_IN_DATA_OFFSET)) {
-		/* Invalid length */
+	size_t out_len = 0;
+	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
+
+	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
 
 	u8_t tag = 0;
 	u16_t len = 0;
 	u8_t *out_digest = NULL;
-	if (!get_tlv(rx_buf, out_len, &tag, &len, &out_digest)) {
+	if (!get_tlv(out_data, out_len, &tag, &len, &out_digest)) {
 		/* Failed to parse result */
 		return -EIO;
 	}
@@ -1110,28 +1096,19 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
-
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_IN_DATA_OFFSET)) {
-		/* Invalid length */
+	size_t out_len = 0;
+	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
+
+	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
 
 	u8_t tag = 0;
 	u16_t out_digest_len = 0;
 	u8_t *out_digest = NULL;
-	if (!get_tlv(rx_buf, out_len, &tag, &out_digest_len, &out_digest)) {
+	if (!get_tlv(out_data, out_len, &tag, &out_digest_len, &out_digest)) {
 		/* Failed to parse result */
 		return -EIO;
 	}
@@ -1215,23 +1192,10 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	// TODO(chr): extract constant
-	__ASSERT(out_len > 2, "Unexpected data returned");
-
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_IN_DATA_OFFSET)) {
-		/* Invalid length */
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
 		return -EIO;
 	}
 
@@ -1241,7 +1205,7 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	}
 
 	*shared_secret_len = out_len;
-	memcpy(shared_secret, rx_buf, out_len);
+	memcpy(shared_secret, out_data, out_len);
 	return 0;
 }
 
@@ -1315,17 +1279,13 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
 	__ASSERT(out_len == 0, "Unexpected data returned");
 
 	return 0;
@@ -1366,23 +1326,18 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 
 	/* Parse response */
 
-	/* need at least the 4 bytes of response data */
-	__ASSERT(ctx->apdu.rx_len >= 4, "Malformed APDU");
-
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
+	size_t out_len = 0;
+	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
 
 	if (out_len != request_len) {
 		/* Unexpected amount of data */
 		return -EIO;
 	}
 
-	memcpy(rnd, rx_buf, rnd_len);
+	memcpy(rnd, out_data, rnd_len);
 	return 0;
 }
