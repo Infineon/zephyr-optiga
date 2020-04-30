@@ -1293,7 +1293,7 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	return 0;
 }
 
-#define OPTIGA_ECDH_CALC_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U8_LEN + TLV_OVERHEAD + SET_TLV_U16_LEN)
+#define OPTIGA_ECDH_CALC_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U8_LEN + TLV_OVERHEAD + SET_TLV_U16_LEN)
 int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 				enum OPTRUST_ALGORITHM alg,
 				const u8_t *pub_key, size_t pub_key_len,
@@ -1301,7 +1301,7 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 {
 	__ASSERT(ctx != NULL && pub_key != NULL, "No NULL parameters allowed");
 
-	if (ctx->apdu_buf_len < OPTIGA_ECDH_CALC_EXT_OVERHEAD) {
+	if (ctx->apdu_buf_len < OPTIGA_ECDH_CALC_OID_OVERHEAD) {
 		/* APDU buffer not big enough */
 		return -ENOMEM;
 	}
