@@ -570,6 +570,63 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 	return 0;
 }
 
+#define OPTIGA_SET_METADATA_CMD_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + 4)
+int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len)
+{
+	__ASSERT(ctx != NULL && data != NULL, "No NULL parameters allowed");
+
+	const size_t apdu_len = OPTIGA_SET_METADATA_CMD_OVERHEAD + data_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* Prevent overflow in APDU buffer */
+		return -ENOMEM;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* OID */
+	sys_put_be16(oid, tx_buf);
+	tx_buf += 2;
+
+	/* Offset */
+	sys_put_be16(0, tx_buf);
+	tx_buf += 2;
+
+	/* Data */
+	memcpy(tx_buf, data, data_len);
+	tx_buf += data_len;
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
+						0x01 /* Write metadata */);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("SetDataObject Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	/* Still need to check return data */
+
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	if (out_len != 0) {
+		/* We don't expect any return data here */
+		return -EIO;
+	}
+
+	return 0;
+}
+
 #define OPTIGA_ECDSA_SIGN_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)
 int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
 {

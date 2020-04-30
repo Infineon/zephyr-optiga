@@ -294,11 +294,6 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
  */
 int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t *data_len);
 
-
-/*
- *  The following APIs are drafts for now
- */
-
 /**
  * @brief Set metadata of a data object
  * @param ctx Command context to use
