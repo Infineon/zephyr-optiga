@@ -33,6 +33,7 @@ enum OPTIGA_TRUSTM_CMD {
 enum OPTIGA_TRUSTM_SET_DATA_OBJECT {
 	OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_DATA = 0x00,
 	OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_METADATA = 0x01,
+	OPTIGA_TRUSTM_SET_DATA_OBJECT_COUNT = 0x02,
 	OPTIGA_TRUSTM_SET_DATA_OBJECT_ERASE_WRITE_DATA = 0x40,
 };
 
@@ -506,9 +507,9 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *
 }
 
 #define OPTIGA_SET_DATA_CMD_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + 4)
-int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
+static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_DATA_OBJECT param, u16_t oid, size_t offs, const u8_t *data, size_t len)
 {
-	__ASSERT(ctx != NULL && buf != NULL, "No NULL parameters allowed");
+	__ASSERT(ctx != NULL && data != NULL, "No NULL parameters allowed");
 
 	if (offs > U16_MAX) {
 		/* Prevent overflow in parameter encoding */
@@ -520,9 +521,6 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 		/* Prevent overflow in APDU buffer */
 		return -ENOMEM;
 	}
-
-	const u8_t param = erase ? OPTIGA_TRUSTM_SET_DATA_OBJECT_ERASE_WRITE_DATA
-		: OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_DATA;
 
 	/* Skip to APDU inData field */
 	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
@@ -536,13 +534,13 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 	tx_buf += 2;
 
 	/* Data */
-	memcpy(tx_buf, buf, len);
+	memcpy(tx_buf, data, len);
 	tx_buf += len;
 
 	int result_code = cmds_submit_apdu(ctx,
 						tx_buf,
 						OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
-						param /* Param */);
+						(u8_t) param /* Param */);
 
 	if (result_code < 0) {
 		/* Our driver errored */
@@ -570,61 +568,22 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 	return 0;
 }
 
-#define OPTIGA_SET_METADATA_CMD_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + 4)
+int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
+{
+	const u8_t param = erase ? OPTIGA_TRUSTM_SET_DATA_OBJECT_ERASE_WRITE_DATA
+		: OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_DATA;
+
+	return optrust_int_data_set(ctx, param, oid, offs, buf, len);
+}
+
 int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len)
 {
-	__ASSERT(ctx != NULL && data != NULL, "No NULL parameters allowed");
+	return optrust_int_data_set(ctx, OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_METADATA, oid, 0, data, data_len);
+}
 
-	const size_t apdu_len = OPTIGA_SET_METADATA_CMD_OVERHEAD + data_len;
-	if (apdu_len > ctx->apdu_buf_len) {
-		/* Prevent overflow in APDU buffer */
-		return -ENOMEM;
-	}
-
-	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
-
-	/* OID */
-	sys_put_be16(oid, tx_buf);
-	tx_buf += 2;
-
-	/* Offset */
-	sys_put_be16(0, tx_buf);
-	tx_buf += 2;
-
-	/* Data */
-	memcpy(tx_buf, data, data_len);
-	tx_buf += data_len;
-
-	int result_code = cmds_submit_apdu(ctx,
-						tx_buf,
-						OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
-						0x01 /* Write metadata */);
-
-	if (result_code < 0) {
-		/* Our driver errored */
-		return result_code;
-	} else if (result_code > 0) {
-		/* OPTIGA produced an error code */
-		LOG_INF("SetDataObject Error Code: 0x%02x", result_code);
-		return -EIO;
-	}
-
-	/* Still need to check return data */
-
-	size_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
-	if (out_data == NULL) {
-		/* Invalid APDU */
-		return -EIO;
-	}
-
-	if (out_len != 0) {
-		/* We don't expect any return data here */
-		return -EIO;
-	}
-
-	return 0;
+int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc)
+{
+	return optrust_int_data_set(ctx, OPTIGA_TRUSTM_SET_DATA_OBJECT_COUNT, oid, 0, &inc, 1);
 }
 
 #define OPTIGA_ECDSA_SIGN_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)

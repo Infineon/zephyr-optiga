@@ -304,6 +304,15 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t 
  */
 int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len);
 
+/**
+ * @brief Increment a monotonic counter
+ * @param ctx Command context to use
+ * @param oid OID of the monotonic counter
+ * @param inc Value by which to increment the counter
+ * @return 0 on success, error code otherwise
+ */
+int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc);
+
 
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
