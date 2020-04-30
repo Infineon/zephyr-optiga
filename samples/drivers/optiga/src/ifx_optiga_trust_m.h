@@ -313,6 +313,27 @@ int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, s
  */
 int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc);
 
+/* See Table 26 - Signature Schemes for more information */
+enum OPTRUST_SIGNATURE_SCHEME {
+	OPTRUST_SIGNATURE_SCHEME_PKCS1_v1_5_SHA256	= 0x01,
+	OPTRUST_SIGNATURE_SCHEME_PKCS1_v1_5_SHA384	= 0x02,
+};
+
+#define OPTRUST_RSA1024_SIGNATURE_LEN 128
+#define OPTRUST_RSA2048_SIGNATURE_LEN 256
+
+/**
+ * @brief Sign a digest using a private key in the OPTIGA
+ *
+ * @param ctx Command context to use
+ * @param oid Object ID of the private key to use
+ * @param digest Digest to sign
+ * @param digest_len Length of digest
+ * @param signature Output buffer for the signature
+ * @param signature_len Length of signature buffer, contains length of signature afterwards.
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len);
 
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
