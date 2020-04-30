@@ -498,8 +498,9 @@ static u8_t test_signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = {0};
 test_ret_t lib_sign_verify_good(void)
 {
 	/* Use the device key to create a signature */
+	size_t sig_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
 	int res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
-		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
+		test_signature, &sig_len);
 	if (res != 0) {
 		return FAIL;
 	}
@@ -518,8 +519,9 @@ test_ret_t lib_sign_verify_good(void)
 test_ret_t sign_verify_bad_hash(void)
 {
 	/* Use the device key to create a signature */
+	size_t sig_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
 	int res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
-		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
+		test_signature, &sig_len);
 	if (res != 0) {
 		return FAIL;
 	}
@@ -545,8 +547,9 @@ test_ret_t sign_verify_bad_hash(void)
 test_ret_t sign_verify_bad_sig(void)
 {
 	/* Use the device key to create a signature */
+	size_t sig_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
 	int res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, test_digest, TEST_DIGEST_LEN,
-		test_signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
+		test_signature, &sig_len);
 	if (res != 0) {
 		return FAIL;
 	}

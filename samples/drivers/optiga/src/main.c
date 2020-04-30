@@ -115,12 +115,13 @@ void main(void)
 
 	u8_t digest[DIGEST_LEN] = {0};
 	u8_t signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = {0};
+	size_t signature_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
 
 	time_stamp = k_uptime_get();
 
 	/* Use the device key to create a signature */
 	res = optrust_ecdsa_sign_oid(&ctx, 0xE0F0, digest, DIGEST_LEN,
-		signature, OPTRUST_NIST_P256_SIGNATURE_LEN);
+		signature, &signature_len);
 
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 

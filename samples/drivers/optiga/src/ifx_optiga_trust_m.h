@@ -171,7 +171,7 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
  * @param signature_len Length of signature buffer, contains length of signature afterwards.
  * @return 0 on success, error code otherwise
  */
-int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len);
+int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len);
 
 /**
  * @brief Verify a signature using a public key provided by the host

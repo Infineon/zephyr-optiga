@@ -142,6 +142,8 @@ static bool get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** val
 #define DER_BITSTRING_PK_OVERHEAD (DER_BITSTRING_OVERHEAD + 1)
 /* For encoding length in a single byte */
 #define DER_LENGTH_SINGLE_MAX 127
+/* Tag + Length + Stuffing byte */
+#define DER_INTEGER_OVERHEAD 3
 
 /**
  * @brief Store a raw public key as a compressed point in ASN.1 DER BITSTRING encoding
@@ -587,7 +589,7 @@ int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc)
 }
 
 #define OPTIGA_ECDSA_SIGN_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)
-int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t signature_len)
+int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 
@@ -629,9 +631,30 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 		return -EIO;
 	}
 
+	size_t expected_sig_len = 0;
+	if (out_len < OPTRUST_NIST_P256_SIGNATURE_LEN) {
+		/* Unexpected data returned */
+		return -EIO;
+	} else if (out_len <= (OPTRUST_NIST_P256_SIGNATURE_LEN + 2 * DER_INTEGER_OVERHEAD)) {
+		expected_sig_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
+	} else if (out_len < OPTRUST_NIST_P384_SIGNATURE_LEN) {
+		/* Unexpected data returned */
+		return -EIO;
+	} else if (out_len <= (OPTRUST_NIST_P384_SIGNATURE_LEN + 2 * DER_INTEGER_OVERHEAD)) {
+		expected_sig_len = OPTRUST_NIST_P384_SIGNATURE_LEN;
+	} else {
+		/* Unexpected data returned */
+		return -EIO;
+	}
+
+	if (*signature_len < expected_sig_len) {
+		/* Output buffer too small */
+		return -ENOMEM;
+	}
+
 	/* decode to raw RS values */
-	bool success = asn1_to_ecdsa_rs(out_data, out_len, signature, signature_len);
-	if(!success) {
+	bool success = asn1_to_ecdsa_rs(out_data, out_len, signature, expected_sig_len);
+	if (!success) {
 		LOG_ERR("Failed to decode signature");
 		return -EIO;
 	}
