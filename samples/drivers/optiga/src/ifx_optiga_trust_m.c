@@ -1551,7 +1551,7 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 	}
 
 	if (out_len != OPTRUST_RSA1024_SIGNATURE_LEN
-		|| out_len != OPTRUST_RSA2048_SIGNATURE_LEN) {
+		&& out_len != OPTRUST_RSA2048_SIGNATURE_LEN) {
 		/* Unexpected data */
 		return -EIO;
 	}
@@ -1564,6 +1564,8 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 	memcpy(signature, out_data, out_len);
 	*signature_len = out_len;
 
+	return 0;
+}
 
 int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
                 enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
