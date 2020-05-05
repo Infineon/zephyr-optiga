@@ -37,7 +37,8 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_DELAYED_ACK_TRIES 20
 #define OPTIGA_DELAYED_ACK_TIME_MS 8
 
-#define OPTIGA_STATUS_POLL_TRIES 20
+/* Need 32s timeout here, because RSA2048 key generation takes long */
+#define OPTIGA_STATUS_POLL_TRIES 4000
 #define OPTIGA_STATUS_POLL_TIME_MS 8
 
 /* Helper function for late acknowledge write transfers */
