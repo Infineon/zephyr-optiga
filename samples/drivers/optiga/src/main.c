@@ -307,6 +307,37 @@ void main(void)
 
 	LOG_HEXDUMP_INF(cert_buf, cert_len, "Random data: ");
 
+	/* Generate RSA key pair */
+	const u16_t rsa_priv_key_oid = 0xE0FC;
+	enum OPTRUST_KEY_USAGE_FLAG key_usage = OPTRUST_KEY_USAGE_FLAG_AUTH | OPTRUST_KEY_USAGE_FLAG_ENC | OPTRUST_KEY_USAGE_FLAG_SIGN | OPTRUST_KEY_USAGE_FLAG_KEY_AGREE;
+
+#define RSA_PUB_KEY_LEN 500
+	static u8_t rsa_pub_key[RSA_PUB_KEY_LEN] = {0};
+	static size_t rsa_pub_key_len = RSA_PUB_KEY_LEN;
+
+	time_stamp = k_uptime_get();
+	res = optrust_rsa_gen_keys_oid(&ctx, rsa_priv_key_oid, OPTRUST_ALGORITHM_RSA_2048, key_usage, rsa_pub_key, &rsa_pub_key_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_rsa_gen_keys_oid res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(rsa_pub_key, rsa_pub_key_len, "RSA Public Key:");
+
+	/* Sign some data using RSA */
+
+	u8_t rsa_signature[OPTRUST_RSA2048_SIGNATURE_LEN] = {0};
+	size_t rsa_signature_len = OPTRUST_RSA2048_SIGNATURE_LEN;
+
+	time_stamp = k_uptime_get();
+
+	/* Use the device key to create a signature */
+	res = optrust_rsa_sign_oid(&ctx, rsa_priv_key_oid, OPTRUST_SIGNATURE_SCHEME_PKCS1_v1_5_SHA256,
+		digest, DIGEST_LEN,
+		rsa_signature, &rsa_signature_len);
+
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_rsa_sign_oid res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(rsa_signature, rsa_signature_len, "RSA Signature:");
 
 
 	LOG_INF("Example finished");
