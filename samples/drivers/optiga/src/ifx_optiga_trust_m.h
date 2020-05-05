@@ -111,7 +111,9 @@ int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs
 enum OPTRUST_ALGORITHM {
     OPTRUST_ALGORITHM_NIST_P256 = 0x03,
     OPTRUST_ALGORITHM_NIST_P384 = 0x04,
-    OPTRUST_ALGORITHM_SHA256	= 0xE2
+    OPTRUST_ALGORITHM_RSA_1024	= 0x41,
+    OPTRUST_ALGORITHM_RSA_2048	= 0x42,
+    OPTRUST_ALGORITHM_SHA256	= 0xE2,
 };
 
 enum OPTRUST_KEY_USAGE_FLAG {
@@ -334,6 +336,12 @@ enum OPTRUST_SIGNATURE_SCHEME {
  * @return 0 on success, error code otherwise
  */
 int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len);
+
+#define OPTRUST_RSA1024_PUB_KEY_LEN 144
+#define OPTRUST_RSA2048_PUB_KEY_LEN 275
+
+int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
 
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */

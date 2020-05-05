@@ -866,30 +866,24 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 	return 0;
 }
 
-#define OPTIGA_ECC_GEN_KEYS_OID_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U8_LEN)
-int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
-                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+#define OPTIGA_INT_GEN_KEYS_OID_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U8_LEN)
+int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t **out_data, size_t *out_data_len)
 {
-	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL, "No NULL parameters allowed");
+	__ASSERT(ctx != NULL && out_data != NULL && out_data_len != NULL, "No NULL parameters allowed");
 
 	switch(alg) {
-        case OPTRUST_ALGORITHM_NIST_P256:
-		if (*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN) {
-				return -EINVAL;
-		}
-		*pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
-		break;
-        case OPTRUST_ALGORITHM_NIST_P384:
-		if (*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN) {
-			return -EINVAL;
-		}
-		*pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
+        case OPTRUST_ALGORITHM_NIST_P256:	/* Intentional fallthrough */
+        case OPTRUST_ALGORITHM_NIST_P384:	/* Intentional fallthrough */
+	case OPTRUST_ALGORITHM_RSA_1024:	/* Intentional fallthrough */
+	case OPTRUST_ALGORITHM_RSA_2048:	/* Intentional fallthrough */
 		break;
 	default:
+		/* Invalid algorithm */
 		return -EINVAL;
 	}
 
-	if (ctx->apdu_buf_len < OPTIGA_ECC_GEN_KEYS_OID_LEN) {
+	if (ctx->apdu_buf_len < OPTIGA_INT_GEN_KEYS_OID_LEN) {
 		/* APDU buffer too small */
 		return -ENOMEM;
 	}
@@ -920,17 +914,53 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	/* Parse response */
 
 	size_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
-	if (out_data == NULL) {
+	u8_t *res_data = cmds_check_apdu(ctx, &out_len);
+	if (res_data == NULL) {
 		/* Invalid APDU */
 		return -EIO;
+	}
+
+	*out_data = res_data;
+	*out_data_len = out_len;
+
+	return 0;
+}
+
+int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+{
+	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL, "No NULL parameters allowed");
+
+	switch(alg) {
+        case OPTRUST_ALGORITHM_NIST_P256:
+		if (*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN) {
+				return -EINVAL;
+		}
+		*pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
+		break;
+        case OPTRUST_ALGORITHM_NIST_P384:
+		if (*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN) {
+			return -EINVAL;
+		}
+		*pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	u8_t *out_data = NULL;
+	size_t out_data_len = 0;
+
+	int res = optrust_int_gen_keys_oid(ctx, oid, alg, key_usage, &out_data, &out_data_len);
+	if (res != 0) {
+		return res;
 	}
 
 	__ASSERT(out_data[0] == 0x02, "Received Key not a pub key");
 
 	// TODO(chr): decide if we can skip ASN.1 decoding
 	/* the following decoding routine only works if the public key has a fixed length */
-	__ASSERT(out_len == (*pub_key_len + 7), "Assumption about pub key encoding was wrong");
+	__ASSERT(out_data_len == (*pub_key_len + 7), "Assumption about pub key encoding was wrong");
 	out_data += 3; // skip tag and length
 	out_data += 4; // skip ASN.1 tag, length and 2 value bytes
 	memcpy(pub_key, out_data, *pub_key_len);
@@ -1533,6 +1563,47 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 
 	memcpy(signature, out_data, out_len);
 	*signature_len = out_len;
+
+
+int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+{
+	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL, "No NULL parameters allowed");
+
+	switch(alg) {
+        case OPTRUST_ALGORITHM_RSA_1024:	/* Intentional fallthrough */
+        case OPTRUST_ALGORITHM_RSA_2048:
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	u8_t *out_data = NULL;
+	size_t out_data_len = 0;
+
+	int res = optrust_int_gen_keys_oid(ctx, oid, alg, key_usage, &out_data, &out_data_len);
+	if (res != 0) {
+		return res;
+	}
+
+	u8_t tag = 0;
+	u16_t len = 0;
+	u8_t *value = NULL;
+
+	if (!get_tlv(out_data, out_data_len, &tag, &len, &value)) {
+		/* Failed to parse output data */
+		return -EIO;
+	}
+
+	__ASSERT(tag == 0x02, "Received Key not a pub key");
+
+	if (len > *pub_key_len) {
+		/* Output buffer too small */
+		return -ENOMEM;
+	}
+
+	memcpy(pub_key, value, len);
+	*pub_key_len = len;
 
 	return 0;
 }
