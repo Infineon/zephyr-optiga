@@ -393,4 +393,19 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 				const u8_t *digest, size_t digest_len,
 				const u8_t *signature, size_t signature_len);
 
+/**
+ * @brief Verify a RSA signature using a public key in the OPTIGA
+ *
+ * @param ctx Command context to use
+ * @param oid Object ID of the public key to use
+ * @param digest Digest to verify the signature of
+ * @param digest_len Length of digest
+ * @param signature Signature to verify
+ * @param signature_len Length of signature
+ * @return 0 if the signature matches, error code otherwise
+ */
+int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
+				const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
+
+
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
