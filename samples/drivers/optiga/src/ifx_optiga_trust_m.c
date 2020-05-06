@@ -97,14 +97,12 @@ static size_t set_tlv_u16(u8_t *buf, u8_t tag, u16_t val)
 	return SET_TLV_U16_LEN;
 }
 
-static bool get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** value)
+static size_t get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** value)
 {
-	if(buf == NULL) {
-		return false;
-	}
+	__ASSERT(buf != NULL, "NULL pointer not allowed");
 
 	if (buf_len < TLV_OVERHEAD) {
-		return false;
+		return 0;
 	}
 
 	u8_t *tlv_start = buf;
@@ -117,7 +115,7 @@ static bool get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** val
 	u16_t tlv_len = sys_get_be16(tlv_start);
 	if (tlv_len > (buf_len - TLV_OVERHEAD)) {
 		/* Value field longer than buffer */
-		return false;
+		return 0;
 	}
 
 	if (len) {
@@ -129,7 +127,7 @@ static bool get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t** val
 		*value = tlv_start;
 	}
 
-	return true;
+	return tlv_len + TLV_OVERHEAD;
 }
 
 
@@ -968,39 +966,27 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	return 0;
 }
 
-#define OPTIGA_ECC_GEN_KEYS_EXT_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD)
-int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
+#define OPTIGA_INT_GEN_KEYS_EXT_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD)
+static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
 				enum OPTRUST_ALGORITHM alg,
-				u8_t *sec_key, size_t *sec_key_len,
-				u8_t *pub_key, size_t *pub_key_len)
+				u8_t **sec_key, size_t *sec_key_len,
+				u8_t **pub_key, size_t *pub_key_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
 		&& sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
 
 	switch(alg) {
-        case OPTRUST_ALGORITHM_NIST_P256:
-		if (*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN
-			|| *sec_key_len < OPTRUST_NIST_P256_SEC_KEY_LEN) {
-			return -EINVAL;
-		}
-
-		*sec_key_len = OPTRUST_NIST_P256_SEC_KEY_LEN;
-		*pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
-	break;
-        case OPTRUST_ALGORITHM_NIST_P384:
-		if(*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN
-			|| *sec_key_len < OPTRUST_NIST_P384_SEC_KEY_LEN) {
-			return -EINVAL;
-		}
-
-		*sec_key_len = OPTRUST_NIST_P384_SEC_KEY_LEN;
-		*pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
+        case OPTRUST_ALGORITHM_NIST_P256:	/* Intentional fallthrough */
+        case OPTRUST_ALGORITHM_NIST_P384:	/* Intentional fallthrough */
+	case OPTRUST_ALGORITHM_RSA_1024:	/* Intentional fallthrough */
+	case OPTRUST_ALGORITHM_RSA_2048:
 		break;
 	default:
+		/* Invalid algorithm */
 		return -EINVAL;
 	}
 
-	if (ctx->apdu_buf_len < OPTIGA_ECC_GEN_KEYS_EXT_LEN) {
+	if (ctx->apdu_buf_len < OPTIGA_INT_GEN_KEYS_EXT_LEN) {
 		/* APDU buffer too small */
 		return -ENOMEM;
 	}
@@ -1034,15 +1020,12 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EIO;
 	}
 
-	// TODO(chr): more robust ASN.1 decoding
-
 	u8_t tag = 0;
 	u16_t len = 0;
-	u8_t *sec_key_asn1 = NULL;
 
-	/* Parse secrect key */
-	bool res = get_tlv(out_data, out_len, &tag, &len, &sec_key_asn1);
-	if (!res) {
+	/* Parse secret key */
+	size_t res = get_tlv(out_data, out_len, &tag, &len, sec_key);
+	if (res == 0) {
 		/* Failed to parse TLV data structure */
 		return -EIO;
 	}
@@ -1052,10 +1035,75 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EIO;
 	}
 
+	*sec_key_len = len;
+
+	out_data += res;
+	out_len -= res;
+
+	res = get_tlv(out_data, out_len, &tag, &len, pub_key);
+	if (res == 0) {
+		/* Failed to parse TLV data structure */
+		return -EIO;
+	}
+
+	if (tag != 0x02) {
+		/* Unexpected Tag */
+		return -EIO;
+	}
+	*pub_key_len = len;
+
+	return 0;
+}
+
+int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
+				enum OPTRUST_ALGORITHM alg,
+				u8_t *sec_key, size_t *sec_key_len,
+				u8_t *pub_key, size_t *pub_key_len)
+{
+	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
+		&& sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
+
+	switch(alg) {
+        case OPTRUST_ALGORITHM_NIST_P256:
+		if (*pub_key_len < OPTRUST_NIST_P256_PUB_KEY_LEN
+			|| *sec_key_len < OPTRUST_NIST_P256_SEC_KEY_LEN) {
+			return -EINVAL;
+		}
+
+		*sec_key_len = OPTRUST_NIST_P256_SEC_KEY_LEN;
+		*pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
+	break;
+        case OPTRUST_ALGORITHM_NIST_P384:
+		if(*pub_key_len < OPTRUST_NIST_P384_PUB_KEY_LEN
+			|| *sec_key_len < OPTRUST_NIST_P384_SEC_KEY_LEN) {
+			return -EINVAL;
+		}
+
+		*sec_key_len = OPTRUST_NIST_P384_SEC_KEY_LEN;
+		*pub_key_len = OPTRUST_NIST_P384_PUB_KEY_LEN;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	u8_t *sec_key_asn1 = NULL;
+	size_t sec_key_asn1_len = 0;
+
+	u8_t *pub_key_asn1 = NULL;
+	size_t pub_key_asn1_len = 0;
+
+	int res = optrust_int_gen_keys_ext(ctx, alg, &sec_key_asn1, &sec_key_asn1_len,
+						&pub_key_asn1, &pub_key_asn1_len);
+	if (res != 0) {
+		return 0;
+	}
+
+	// TODO(chr): more robust ASN.1 decoding
+
 	/* Secret key is encoded as DER OCTET STRING */
 
 	/* ASN.1 encoding overhead are 2 bytes */
-	if (len != (*sec_key_len + 2)) {
+	if (sec_key_asn1_len != (*sec_key_len + 2)) {
 		/* Unexpected length */
 		return -EIO;
 	}
@@ -1066,26 +1114,10 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 	sec_key_asn1 += 2;
 	memcpy(sec_key, sec_key_asn1, *sec_key_len);
 
-	/* Parse public key */
-	out_data = sec_key_asn1 + *sec_key_len;
-	out_len -= len;
-
-	u8_t *pub_key_asn1 = NULL;
-	res = get_tlv(out_data, out_len, &tag, &len, &pub_key_asn1);
-	if (!res) {
-		/* Failed to parse TLV data structure */
-		return -EIO;
-	}
-
-	if (tag != 0x02) {
-		/* Unexpected Tag */
-		return -EIO;
-	}
-
 	/* Public key is encoded as DER BIT STRING */
 
 	/* ASN.1 encoding overhead are 4 bytes */
-	if (len != (*pub_key_len + 4)) {
+	if (pub_key_asn1_len != (*pub_key_len + 4)) {
 		/* Unexpected length */
 		return -EIO;
 	}
@@ -1100,6 +1132,7 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 
 	return 0;
 }
+
 
 /* Tags for CalcHash command, see Table 16 */
 enum OPTIGA_TRUSTM_CALC_HASH_TAGS {
@@ -1166,7 +1199,7 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
 	u8_t tag = 0;
 	u16_t len = 0;
 	u8_t *out_digest = NULL;
-	if (!get_tlv(out_data, out_len, &tag, &len, &out_digest)) {
+	if (get_tlv(out_data, out_len, &tag, &len, &out_digest) == 0) {
 		/* Failed to parse result */
 		return -EIO;
 	}
@@ -1254,7 +1287,7 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 	u8_t tag = 0;
 	u16_t out_digest_len = 0;
 	u8_t *out_digest = NULL;
-	if (!get_tlv(out_data, out_len, &tag, &out_digest_len, &out_digest)) {
+	if (get_tlv(out_data, out_len, &tag, &out_digest_len, &out_digest) == 0) {
 		/* Failed to parse result */
 		return -EIO;
 	}
@@ -1592,7 +1625,7 @@ int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	u16_t len = 0;
 	u8_t *value = NULL;
 
-	if (!get_tlv(out_data, out_data_len, &tag, &len, &value)) {
+	if (get_tlv(out_data, out_data_len, &tag, &len, &value) == 0) {
 		/* Failed to parse output data */
 		return -EIO;
 	}
@@ -1606,6 +1639,50 @@ int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 
 	memcpy(pub_key, value, len);
 	*pub_key_len = len;
+
+	return 0;
+}
+
+int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx,
+				enum OPTRUST_ALGORITHM alg,
+				u8_t *sec_key, size_t *sec_key_len,
+				u8_t *pub_key, size_t *pub_key_len)
+{
+	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
+		&& sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
+
+	switch(alg) {
+        case OPTRUST_ALGORITHM_RSA_1024:	/* Intentional fallthrough */
+	case OPTRUST_ALGORITHM_RSA_2048:
+		break;
+	default:
+		/* Invalid key algorithm */
+		return -EINVAL;
+	}
+
+	u8_t *i_sec_key = NULL;
+	size_t i_sec_key_len = 0;
+
+	u8_t *i_pub_key = NULL;
+	size_t i_pub_key_len = 0;
+
+	int res =  optrust_int_gen_keys_ext(ctx, alg, &i_sec_key, &i_sec_key_len,
+						&i_pub_key, &i_pub_key_len);
+	if (res != 0) {
+		return res;
+	}
+
+	/* Check length of output buffers */
+	if (i_sec_key_len > *sec_key_len || i_pub_key_len > *pub_key_len) {
+		/* Output buffer too small */
+		return -ENOMEM;
+	}
+
+	/* Copy to output buffers */
+	memcpy(sec_key, i_sec_key, i_sec_key_len);
+	memcpy(pub_key, i_pub_key, i_pub_key_len);
+	*sec_key_len = i_sec_key_len;
+	*pub_key_len = i_pub_key_len;
 
 	return 0;
 }

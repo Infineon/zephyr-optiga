@@ -339,6 +339,20 @@ void main(void)
 	LOG_INF("optrust_rsa_sign_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(rsa_signature, rsa_signature_len, "RSA Signature:");
 
+	/* Generate RSA keypair and export secret and public key */
+#define RSA_SEC_KEY_LEN 600
+	static u8_t rsa_sec_key[RSA_SEC_KEY_LEN] = {0};
+	static size_t rsa_sec_key_len = RSA_SEC_KEY_LEN;
+
+	time_stamp = k_uptime_get();
+	res = optrust_rsa_gen_keys_ext(&ctx, OPTRUST_ALGORITHM_RSA_1024, rsa_sec_key, &rsa_sec_key_len, rsa_pub_key, &rsa_pub_key_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_rsa_gen_keys_ext res: %d, took %d ms", res, milliseconds_spent);
+	LOG_HEXDUMP_INF(rsa_sec_key, rsa_sec_key_len, "RSA Secret Key:");
+	LOG_HEXDUMP_INF(rsa_pub_key, rsa_pub_key_len, "RSA Public Key:");
+
+
 
 	LOG_INF("Example finished");
 }
