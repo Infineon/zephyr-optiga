@@ -144,7 +144,6 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
  *
  * @param ctx Command context to use
  * @param alg Type of key pair to generate
- * @param key_usage Combination of IFX_OPTIGA_TRUST_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
  * @param priv_key Output buffer for the private key
  * @param priv_key_len length of pub_key, contains the length of the private key
  * @param pub_key Output buffer for the public key
@@ -340,6 +339,19 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 #define OPTRUST_RSA1024_PUB_KEY_LEN 144
 #define OPTRUST_RSA2048_PUB_KEY_LEN 275
 
+/**
+ * @brief Generate a RSA key pair and export the public key
+ *
+ * @param ctx Command context to use
+ * @param oid Object ID to store the private key
+ * @param alg Type of key pair to generate
+ * @param key_usage Combination of IFX_OPTIGA_TRUST_KEY_USAGE_FLAG, see Solution Reference Manual, Table 39 for their meaning
+ * @param pub_key Output buffer for the public key
+ * @param pub_key_len length of pub_key, contains the length of the public key
+ * @return 0 on success, error code otherwise
+ *
+ * @note The size of the public key buffer must match the selected algorithm or be bigger.
+ */
 int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
                 enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
 
