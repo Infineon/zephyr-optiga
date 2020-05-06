@@ -1686,3 +1686,73 @@ int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx,
 
 	return 0;
 }
+
+#define OPTIGA_RSA_VERIFY_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + TLV_OVERHEAD + SET_TLV_U8_LEN + TLV_OVERHEAD)
+int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEME scheme,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				const u8_t *digest, size_t digest_len,
+				const u8_t *signature, size_t signature_len)
+{
+	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
+	switch(alg) {
+	case OPTRUST_ALGORITHM_RSA_1024:
+	case OPTRUST_ALGORITHM_RSA_2048:
+		break;
+	default:
+		/* Invalid public key algorithm */
+		return -EINVAL;
+	}
+
+	const size_t apdu_len = OPTIGA_RSA_VERIFY_EXT_OVERHEAD + pub_key_len + digest_len + signature_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Digest */
+	tx_buf += set_tlv(tx_buf, 0x01, digest, digest_len);
+
+	/* Signature */
+	tx_buf += set_tlv(tx_buf, 0x02, signature, signature_len);
+
+	/* Algorithm Identifier of public key */
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+
+	/* Public Key */
+	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
+						(u8_t) scheme);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	if (out_len != 0) {
+		/* Unexpected outData */
+		return -EIO;
+	}
+
+	return 0;
+}
+	return 0;
+}

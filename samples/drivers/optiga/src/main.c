@@ -309,14 +309,16 @@ void main(void)
 
 	/* Generate RSA key pair */
 	const u16_t rsa_priv_key_oid = 0xE0FC;
-	enum OPTRUST_KEY_USAGE_FLAG key_usage = OPTRUST_KEY_USAGE_FLAG_AUTH | OPTRUST_KEY_USAGE_FLAG_ENC | OPTRUST_KEY_USAGE_FLAG_SIGN | OPTRUST_KEY_USAGE_FLAG_KEY_AGREE;
+	const enum OPTRUST_KEY_USAGE_FLAG key_usage = OPTRUST_KEY_USAGE_FLAG_AUTH | OPTRUST_KEY_USAGE_FLAG_ENC | OPTRUST_KEY_USAGE_FLAG_SIGN | OPTRUST_KEY_USAGE_FLAG_KEY_AGREE;
+	const enum OPTRUST_ALGORITHM key_alg = OPTRUST_ALGORITHM_RSA_2048;
+	const enum OPTRUST_SIGNATURE_SCHEME sig_scheme = OPTRUST_SIGNATURE_SCHEME_PKCS1_v1_5_SHA256;
 
 #define RSA_PUB_KEY_LEN 500
 	static u8_t rsa_pub_key[RSA_PUB_KEY_LEN] = {0};
 	static size_t rsa_pub_key_len = RSA_PUB_KEY_LEN;
 
 	time_stamp = k_uptime_get();
-	res = optrust_rsa_gen_keys_oid(&ctx, rsa_priv_key_oid, OPTRUST_ALGORITHM_RSA_2048, key_usage, rsa_pub_key, &rsa_pub_key_len);
+	res = optrust_rsa_gen_keys_oid(&ctx, rsa_priv_key_oid, key_alg, key_usage, rsa_pub_key, &rsa_pub_key_len);
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 
 	LOG_INF("optrust_rsa_gen_keys_oid res: %d, took %d ms", res, milliseconds_spent);
@@ -330,7 +332,7 @@ void main(void)
 	time_stamp = k_uptime_get();
 
 	/* Use the device key to create a signature */
-	res = optrust_rsa_sign_oid(&ctx, rsa_priv_key_oid, OPTRUST_SIGNATURE_SCHEME_PKCS1_v1_5_SHA256,
+	res = optrust_rsa_sign_oid(&ctx, rsa_priv_key_oid, sig_scheme,
 		digest, DIGEST_LEN,
 		rsa_signature, &rsa_signature_len);
 
@@ -338,6 +340,18 @@ void main(void)
 
 	LOG_INF("optrust_rsa_sign_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(rsa_signature, rsa_signature_len, "RSA Signature:");
+
+	/* Verify RSA signature */
+	time_stamp = k_uptime_get();
+
+	res = optrust_rsa_verify_ext(&ctx, sig_scheme,
+					key_alg, rsa_pub_key, rsa_pub_key_len,
+					digest, DIGEST_LEN,
+					rsa_signature, rsa_signature_len);
+	milliseconds_spent = k_uptime_delta(&time_stamp);
+
+	LOG_INF("optrust_rsa_verify_ext res: %d, took %d ms", res, milliseconds_spent);
+	LOG_INF("RSA Verify: %s", res == 0 ? "PASS" : "FAIL");
 
 	/* Generate RSA keypair and export secret and public key */
 #define RSA_SEC_KEY_LEN 600

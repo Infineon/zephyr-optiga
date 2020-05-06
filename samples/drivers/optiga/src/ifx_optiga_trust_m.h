@@ -374,5 +374,23 @@ int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 				u8_t *sec_key, size_t *sec_key_len,
 				u8_t *pub_key, size_t *pub_key_len);
 
+/**
+ * @brief Verify a RSA signature using a public key provided by the host
+ *
+ * @param ctx Command context to use
+ * @param scheme Signature scheme to use, see Table 26 - Signature Schemes for details
+ * @param alg Algorithm identifier of the public key
+ * @param pub_key Output buffer for the public key
+ * @param pub_key_len length of pub_key, contains the length of the public key
+ * @param digest Digest to verify the signature of
+ * @param digest_len Length of digest
+ * @param signature Signature to verify
+ * @param signature_len Length of signature
+ * @return 0 if the signature matches, error code otherwise
+ */
+int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEME scheme,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				const u8_t *digest, size_t digest_len,
+				const u8_t *signature, size_t signature_len);
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
