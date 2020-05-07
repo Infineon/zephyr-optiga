@@ -407,5 +407,19 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
 				const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
 
+/**
+ * @brief Derive a key from a shared secret
+ *
+ * @param ctx Command context to use
+ * @param sec_oid Object ID of the shared secret to use
+ * @param deriv_data Secret derivation data
+ * @param deriv_data_len Length of deriv_data
+ * @param deriv_len Length of the secret to derive
+ * @param deriv_oid OID to store the derived secret
+ * @return 0 if the signature matches, error code otherwise
+ */
+int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
+				size_t deriv_len, u16_t deriv_oid);
+
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
