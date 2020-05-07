@@ -299,32 +299,16 @@ static u8_t* cmds_check_apdu(struct optrust_ctx *ctx, u16_t *out_len)
  */
 static int cmds_check_apdu_empty(struct optrust_ctx *ctx)
 {
-	__ASSERT(ctx != NULL, "No NULL parameters allowed");
-
-	/* need at least the 4 bytes of response data */
-	if (ctx->apdu.rx_len < OPTIGA_TRUSTM_OUT_DATA_OFFSET) {
-		LOG_ERR("Malformed APDU");
+	/* Empty APDU is 4 bytes */
+	if (ctx->apdu.rx_len != OPTIGA_TRUSTM_OUT_DATA_OFFSET) {
+		/* Invalid length */
 		return -EIO;
 	}
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
-
-	u8_t sta = 0;
-	u16_t out_len = 0;
-	rx_buf += cmds_get_apdu_header(rx_buf, &sta, &out_len);
-
-	/* Failed APDUs should never reach this layer */
-	__ASSERT(sta == 0x00, "Unexpected failed APDU");
-
-	/* Ensure length of APDU and length of buffer match */
-	if (out_len != (ctx->apdu.rx_len - OPTIGA_TRUSTM_OUT_DATA_OFFSET)) {
-		LOG_ERR("Incomplete APDU");
-		return -EIO;
-	}
-
-	/* Ensure received APDU is empty */
-	if (out_len != 0) {
-		LOG_ERR("APDU not empty");
+	/* Bytes 0, 2 and 3 are expected to be 0x00 for an empty APDU */
+	if (ctx->apdu.rx_buf[0] != 0x00	|| ctx->apdu.rx_buf[2] != 0x00
+		|| ctx->apdu.rx_buf[3] != 0x00) {
+		/* APDU not empty */
 		return -EIO;
 	}
 
