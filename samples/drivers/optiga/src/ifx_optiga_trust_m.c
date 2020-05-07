@@ -1834,7 +1834,7 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Shared Secret */
-	tx_buf += set_tlv_u8(tx_buf, 0x01, sec_oid);
+	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_oid);
 
 	/* Secret derivation data */
 	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, deriv_data_len);
@@ -1901,7 +1901,7 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
 	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Shared Secret */
-	tx_buf += set_tlv_u8(tx_buf, 0x01, sec_oid);
+	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_oid);
 
 	/* Secret derivation data */
 	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, deriv_data_len);
