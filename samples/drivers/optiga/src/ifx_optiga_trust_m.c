@@ -1811,13 +1811,23 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGN
 
 #define OPTIGA_TLS1_2_PRF_SHA256_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U8_LEN + TLV_OVERHEAD + SET_TLV_U16_LEN + SET_TLV_U16_LEN)
 int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
-				size_t deriv_len, u16_t deriv_oid)
+				size_t key_len, u16_t key_oid)
 {
 	__ASSERT(ctx != NULL && deriv_data != NULL, "No NULL parameters allowed");
 	const size_t apdu_len = OPTIGA_TLS1_2_PRF_SHA256_OID_OVERHEAD + deriv_data_len;
 	if (apdu_len > ctx->apdu_buf_len) {
 		/* APDU buffer not big enough */
 		return -ENOMEM;
+	}
+
+	if (deriv_data_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	if (key_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
 	}
 
 	/* Skip to APDU inData field */
@@ -1830,10 +1840,10 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, deriv_data_len);
 
 	/* Length of derived key */
-	tx_buf += set_tlv_u16(tx_buf, 0x03, deriv_len);
+	tx_buf += set_tlv_u16(tx_buf, 0x03, key_len);
 
-	/* OID of derived key */
-	tx_buf += set_tlv_u16(tx_buf, 0x08, deriv_oid);
+	/* OID to store the derived key */
+	tx_buf += set_tlv_u16(tx_buf, 0x08, key_oid);
 
 	int result_code = cmds_submit_apdu(ctx,
 						tx_buf,
@@ -1862,6 +1872,75 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 		/* Unexpected outData */
 		return -EIO;
 	}
+
+	return 0;
+}
+
+#define OPTIGA_TLS1_2_PRF_SHA256_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U8_LEN + TLV_OVERHEAD + SET_TLV_U16_LEN + TLV_OVERHEAD)
+int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
+				u8_t *key, size_t key_len)
+{
+	__ASSERT(ctx != NULL && deriv_data != NULL, "No NULL parameters allowed");
+	const size_t apdu_len = OPTIGA_TLS1_2_PRF_SHA256_EXT_OVERHEAD + deriv_data_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (deriv_data_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	if (key_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* OID of Shared Secret */
+	tx_buf += set_tlv_u8(tx_buf, 0x01, sec_oid);
+
+	/* Secret derivation data */
+	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, deriv_data_len);
+
+	/* Length of derived key */
+	tx_buf += set_tlv_u16(tx_buf, 0x03, key_len);
+
+	/* Export derived key */
+	tx_buf += set_tlv(tx_buf, 0x07, NULL, 0);
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_DERIVE_KEY,
+						0x01 /* TLS PRF SHA256 according to [RFC5246] */);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("DeriveKey Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	size_t out_len = 0;
+	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	if (out_len != key_len) {
+		/* Unexpected outData */
+		return -EIO;
+	}
+
+	memcpy(key, out_data, out_len);
 
 	return 0;
 }
