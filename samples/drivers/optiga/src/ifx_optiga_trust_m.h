@@ -435,4 +435,20 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
 				u8_t *key, size_t key_len);
 
+/**
+ * @brief Encrypt data using a public RSA key
+ *
+ * @param ctx Command context to use
+ * @param msg Message to encrypt
+ * @param msg_len Length of msg
+ * @param alg Algorithm of the public key
+ * @param pub_key Public key to use for encryption
+ * @param pub_key_len Length of pub_key
+ * @param enc_msg Output buffer for the encrypted message
+ * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ */
+int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				u8_t *enc_msg, size_t *enc_msg_len);
+
 #endif /* IFX_OPTIGA_TRUST_M_H_ */

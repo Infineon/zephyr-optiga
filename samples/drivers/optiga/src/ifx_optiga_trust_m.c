@@ -22,6 +22,7 @@ enum OPTIGA_TRUSTM_CMD {
 	OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT =	0x81,
 	OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT =	0x82,
 	OPTIGA_TRUSTM_CMD_GET_RANDOM =		0x8C,
+	OPTIGA_TRUSTM_CMD_ENCRYPT_ASYM =	0x9E,
 	OPTIGA_TRUSTM_CMD_CALC_HASH =		0xB0,
 	OPTIGA_TRUSTM_CMD_CALC_SIGN =		0xB1,
 	OPTIGA_TRUSTM_CMD_VERIFY_SIGN =		0xB2,
@@ -1915,4 +1916,96 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
 	memcpy(key, out_data, out_len);
 
 	return 0;
+}
+
+#define OPTIGA_RSA_ENCRYPT_MSG_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U8_LEN + TLV_OVERHEAD)
+int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				u8_t *enc_msg, size_t *enc_msg_len)
+{
+	__ASSERT(ctx != NULL && msg != NULL && pub_key != NULL && enc_msg != NULL, "No NULL parameters allowed");
+	switch(alg) {
+	case OPTRUST_ALGORITHM_RSA_1024:
+	case OPTRUST_ALGORITHM_RSA_2048:
+		break;
+	default:
+		/* Invalid public key algorithm */
+		return -EINVAL;
+	}
+
+	const size_t apdu_len = OPTIGA_RSA_ENCRYPT_MSG_EXT_OVERHEAD + msg_len + pub_key_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (msg_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	if (pub_key_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Message */
+	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
+
+	/* Algorithm Identifier of public key*/
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+
+	/* Public Key */
+	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_ENCRYPT_ASYM,
+						0x11 /* RSA key pair with PKCS1 v1.5 padding according to [RFC8017] */);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("EncryptAsym Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	u16_t out_len = 0;
+	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	u8_t tag = 0;
+	u16_t len = 0;
+	u8_t *value = NULL;
+
+	if(get_tlv(out_data, out_len, &tag, &len, &value) == 0) {
+		/* Invalid data */
+		return -EIO;
+	}
+
+	if (tag != 0x61) {
+		/* Invalid data */
+		return -EIO;
+	}
+
+	if (len > *enc_msg_len) {
+		/* Output buffer too small */
+		return -ENOMEM;
+	}
+
+	memcpy(enc_msg, value, len);
+	*enc_msg_len = len;
+
+	return 0;
+
 }
