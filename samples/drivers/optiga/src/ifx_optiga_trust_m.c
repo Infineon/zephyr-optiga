@@ -23,6 +23,7 @@ enum OPTIGA_TRUSTM_CMD {
 	OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT =	0x82,
 	OPTIGA_TRUSTM_CMD_GET_RANDOM =		0x8C,
 	OPTIGA_TRUSTM_CMD_ENCRYPT_ASYM =	0x9E,
+	OPTIGA_TRUSTM_CMD_DECRYPT_ASYM =	0x9F,
 	OPTIGA_TRUSTM_CMD_CALC_HASH =		0xB0,
 	OPTIGA_TRUSTM_CMD_CALC_SIGN =		0xB1,
 	OPTIGA_TRUSTM_CMD_VERIFY_SIGN =		0xB2,
@@ -2114,4 +2115,124 @@ int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
 	tx_buf += set_tlv_u16(tx_buf, 0x04, cert_oid);
 
 	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
+}
+
+#define OPTIGA_RSA_DECRYPT_MSG_OID_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)
+int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				u16_t key_oid,	u8_t *dec_msg, size_t *dec_msg_len)
+{
+	__ASSERT(ctx != NULL && msg != NULL && dec_msg != NULL, "No NULL parameters allowed");
+
+	const size_t apdu_len = OPTIGA_RSA_DECRYPT_MSG_OID_LEN + msg_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (msg_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Protected Message */
+	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
+
+	/* Private key OID */
+	tx_buf += set_tlv_u16(tx_buf, 0x02, key_oid);
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_DECRYPT_ASYM,
+						0x11 /* RSA key pair with PKCS1 v1.5 padding according to [RFC8017] */);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("DecryptAsym Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	/* Parse response */
+
+	u16_t out_len = 0;
+	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	u8_t tag = 0;
+	u16_t len = 0;
+	u8_t *value = NULL;
+
+	if(get_tlv(out_data, out_len, &tag, &len, &value) == 0) {
+		/* Invalid data */
+		return -EIO;
+	}
+
+	if (tag != 0x61) {
+		/* Invalid data */
+		return -EIO;
+	}
+
+	if (len > *dec_msg_len) {
+		/* Output buffer too small */
+		return -ENOMEM;
+	}
+
+	memcpy(dec_msg, value, len);
+	*dec_msg_len = len;
+
+	return 0;
+}
+
+#define OPTIGA_RSA_DECRYPT_OID_OID_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN + SET_TLV_U16_LEN)
+int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				u16_t key_oid,	u16_t dec_oid)
+{
+__ASSERT(ctx != NULL && msg != NULL, "No NULL parameters allowed");
+
+	const size_t apdu_len = OPTIGA_RSA_DECRYPT_MSG_OID_LEN + msg_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (msg_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Protected Message */
+	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
+
+	/* Private key OID */
+	tx_buf += set_tlv_u16(tx_buf, 0x02, key_oid);
+
+	/* OID to store decrypted data */
+	tx_buf += set_tlv_u16(tx_buf, 0x02, key_oid);
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_DECRYPT_ASYM,
+						0x11 /* RSA key pair with PKCS1 v1.5 padding according to [RFC8017] */);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("DecryptAsym Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	return cmds_check_apdu_empty(ctx);
 }

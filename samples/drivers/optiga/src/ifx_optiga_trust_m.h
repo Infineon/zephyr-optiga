@@ -499,4 +499,31 @@ int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
 				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len);
 
+/**
+ * @brief Decrypt a message using a RSA private key from the device
+ *
+ * @param ctx Command context to use
+ * @param msg Message to decrypt
+ * @param msg_len Length of msg
+ * @param key_oid OID of the decryption key
+ * @param enc_msg Output buffer for the encrypted message
+ * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				u16_t key_oid,	u8_t *dec_msg, size_t *dec_msg_len);
+
+/**
+ * @brief Decrypt a message using a RSA private key from the device and store it in an OID
+ *
+ * @param ctx Command context to use
+ * @param msg Message to decrypt
+ * @param msg_len Length of msg
+ * @param key_oid OID of the decryption key
+ * @param dec_oid OID to store the decrypted message
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				u16_t key_oid,	u16_t dec_oid);
+
 #endif /* IFX_OPTIGA_TRUST_M_H_ */
