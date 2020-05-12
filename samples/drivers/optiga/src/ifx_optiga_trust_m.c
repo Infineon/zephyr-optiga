@@ -21,6 +21,7 @@ LOG_MODULE_REGISTER(cmds_m);
 enum OPTIGA_TRUSTM_CMD {
 	OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT =	0x81,
 	OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT =	0x82,
+	OPTIGA_TRUSTM_CMD_SET_PROTECTED =	0x83,
 	OPTIGA_TRUSTM_CMD_GET_RANDOM =		0x8C,
 	OPTIGA_TRUSTM_CMD_ENCRYPT_ASYM =	0x9E,
 	OPTIGA_TRUSTM_CMD_DECRYPT_ASYM =	0x9F,
@@ -578,6 +579,125 @@ int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, s
 int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc)
 {
 	return optrust_int_data_set(ctx, OPTIGA_TRUSTM_SET_DATA_OBJECT_COUNT, oid, 0, &inc, 1);
+}
+
+#define OPTIGA_DATA_PROTECTED_UPDATE_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD)
+/* See 4.4.1.5 SetObjectProtected footnotes for the source */
+#define OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN 640
+int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest, size_t manifest_len,
+					const u8_t *payload, size_t payload_len)
+{
+	// TODO(chr): check if this function needs to be atomic or if other APDUs can be mixed in
+	__ASSERT(ctx != NULL && manifest != NULL && payload != NULL, "No NULL parameters allowed");
+
+	if (manifest_len > U16_MAX) {
+		/* Prevent overflow in parameter encoding */
+		return -EINVAL;
+	}
+
+	const size_t manifest_apdu_len = OPTIGA_DATA_PROTECTED_UPDATE_OVERHEAD + manifest_len;
+	if (manifest_apdu_len > ctx->apdu_buf_len) {
+		/* Prevent overflow in APDU buffer */
+		return -ENOMEM;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Manifest */
+	tx_buf += set_tlv(tx_buf, 0x30, manifest, manifest_len);
+
+	int res_code = cmds_submit_apdu(ctx,
+					tx_buf,
+					OPTIGA_TRUSTM_CMD_SET_PROTECTED,
+					0x01 /* manifest format (CDDL CBOR) */);
+
+	if (res_code < 0) {
+		/* Our driver errored */
+		return res_code;
+	} else if (res_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("SetObjectProtected Error Code: 0x%02x", res_code);
+		return -EIO;
+	}
+
+	/* No response data expected */
+	res_code =  cmds_check_apdu_empty(ctx);
+	if (res_code != 0) {
+		return res_code;
+	}
+
+	const u8_t *cur_payload = payload;
+	size_t remaining_len = payload_len;
+
+	/* Send 'continue' APDU */
+	while(remaining_len > OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN) {
+		const size_t continue_apdu_len = OPTIGA_DATA_PROTECTED_UPDATE_OVERHEAD + OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN;
+		if (continue_apdu_len > ctx->apdu_buf_len) {
+			/* Prevent overflow in APDU buffer */
+			return -ENOMEM;
+		}
+
+		/* Skip to APDU inData field */
+		tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+		/* Continue Payload */
+		tx_buf += set_tlv(tx_buf, 0x32, cur_payload, OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN);
+
+		res_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_SET_PROTECTED,
+						0x01 /* manifest format (CDDL CBOR) */);
+
+		if (res_code < 0) {
+			/* Our driver errored */
+			return res_code;
+		} else if (res_code > 0) {
+			/* OPTIGA produced an error code */
+			LOG_INF("SetObjectProtected Error Code: 0x%02x", res_code);
+			return -EIO;
+		}
+
+		/* No response data expected */
+		res_code =  cmds_check_apdu_empty(ctx);
+		if (res_code != 0) {
+			return res_code;
+		}
+
+		cur_payload += OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN;
+		remaining_len -= OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN;
+	}
+
+	/* Send 'final' APDU */
+
+	const size_t final_apdu_len = OPTIGA_DATA_PROTECTED_UPDATE_OVERHEAD + remaining_len;
+	if (final_apdu_len > ctx->apdu_buf_len) {
+		/* Prevent overflow in APDU buffer */
+		return -ENOMEM;
+	}
+
+	/* Skip to APDU inData field */
+	tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Final Payload */
+	tx_buf += set_tlv(tx_buf, 0x31, cur_payload, remaining_len);
+
+	res_code = cmds_submit_apdu(ctx,
+					tx_buf,
+					OPTIGA_TRUSTM_CMD_SET_PROTECTED,
+					0x01 /* manifest format (CDDL CBOR) */);
+
+	if (res_code < 0) {
+		/* Our driver errored */
+		return res_code;
+	} else if (res_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("SetObjectProtected Error Code: 0x%02x", res_code);
+		return -EIO;
+	}
+
+	/* No response data expected */
+	return cmds_check_apdu_empty(ctx);
 }
 
 #define OPTIGA_ECDSA_SIGN_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)

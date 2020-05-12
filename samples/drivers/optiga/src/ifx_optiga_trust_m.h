@@ -91,6 +91,20 @@ int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *p
 int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
 
 /**
+ * @brief Update a data object using the "Protected Update" mechanism
+ *
+ * @param ctx Command context to use
+ * @param manifest Update Manifest to use
+ * @param manifest_len Length of manifest
+ * @param payload Payload for the update
+ * @param payload_len Length of payload
+ * @return 0 on success, error code otherwise
+ *
+ * @note See "Table 11 - SetObjectProtected" Coding for details
+ */
+int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest, size_t manifest_len, const u8_t *payload, size_t payload_len);
+
+/**
  * @brief Write data to a data object in the OPTIGA
  *
  * @param ctx Command context to use
