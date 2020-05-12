@@ -446,9 +446,57 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
  * @param pub_key_len Length of pub_key
  * @param enc_msg Output buffer for the encrypted message
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ * @return 0 on success, error code otherwise
  */
 int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
 				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
 				u8_t *enc_msg, size_t *enc_msg_len);
+
+/**
+ * @brief Encrypt data in an OID using a public RSA public key
+ *
+ * @param ctx Command context to use
+ * @param oid OID of which the data should be encrypted
+ * @param alg Algorithm of the public key
+ * @param pub_key Public key to use for encryption
+ * @param pub_key_len Length of pub_key
+ * @param enc_msg Output buffer for the encrypted message
+ * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				u8_t *enc_msg, size_t *enc_msg_len);
+
+/**
+ * @brief Encrypt data using a RSA Public Key Certificate from the device
+ *
+ * @param ctx Command context to use
+ * @param msg Message to encrypt
+ * @param msg_len Length of msg
+ * @param alg Algorithm of the public key
+ * @param pub_key Public key to use for encryption
+ * @param pub_key_len Length of pub_key
+ * @param enc_msg Output buffer for the encrypted message
+ * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len);
+
+/**
+ * @brief Encrypt data in an OID using a RSA Public Key Certificate from the device
+ *
+ * @param ctx Command context to use
+ * @param msg_oid OID of which the data should be encrypted
+ * @param alg Algorithm of the public key
+ * @param pub_key Public key to use for encryption
+ * @param pub_key_len Length of pub_key
+ * @param enc_msg Output buffer for the encrypted message
+ * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
+				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len);
 
 #endif /* IFX_OPTIGA_TRUST_M_H_ */

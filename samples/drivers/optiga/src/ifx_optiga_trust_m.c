@@ -1918,49 +1918,17 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
 	return 0;
 }
 
-#define OPTIGA_RSA_ENCRYPT_MSG_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U8_LEN + TLV_OVERHEAD)
-int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-				u8_t *enc_msg, size_t *enc_msg_len)
+/**
+ * @brief Internal function to submit and parse the result of an EncryptAsym command
+ *
+ * @param ctx Command context to use
+ * @param tx_buf First free element in transmit buffer
+ * @param enc_msg Output buffer for the encrypted message
+ * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_int_rsa_encrypt_submit(struct optrust_ctx *ctx, u8_t *tx_buf, u8_t *enc_msg, size_t *enc_msg_len)
 {
-	__ASSERT(ctx != NULL && msg != NULL && pub_key != NULL && enc_msg != NULL, "No NULL parameters allowed");
-	switch(alg) {
-	case OPTRUST_ALGORITHM_RSA_1024:
-	case OPTRUST_ALGORITHM_RSA_2048:
-		break;
-	default:
-		/* Invalid public key algorithm */
-		return -EINVAL;
-	}
-
-	const size_t apdu_len = OPTIGA_RSA_ENCRYPT_MSG_EXT_OVERHEAD + msg_len + pub_key_len;
-	if (apdu_len > ctx->apdu_buf_len) {
-		/* APDU buffer not big enough */
-		return -ENOMEM;
-	}
-
-	if (msg_len > U16_MAX) {
-		/* Overflow in length field */
-		return -EINVAL;
-	}
-
-	if (pub_key_len > U16_MAX) {
-		/* Overflow in length field */
-		return -EINVAL;
-	}
-
-	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
-
-	/* Message */
-	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
-
-	/* Algorithm Identifier of public key*/
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
-
-	/* Public Key */
-	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
-
 	int result_code = cmds_submit_apdu(ctx,
 						tx_buf,
 						OPTIGA_TRUSTM_CMD_ENCRYPT_ASYM,
@@ -2007,5 +1975,143 @@ int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	*enc_msg_len = len;
 
 	return 0;
+}
 
+#define OPTIGA_RSA_ENCRYPT_MSG_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U8_LEN + TLV_OVERHEAD)
+int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				u8_t *enc_msg, size_t *enc_msg_len)
+{
+	__ASSERT(ctx != NULL && msg != NULL && pub_key != NULL && enc_msg != NULL, "No NULL parameters allowed");
+	switch(alg) {
+	case OPTRUST_ALGORITHM_RSA_1024:
+	case OPTRUST_ALGORITHM_RSA_2048:
+		break;
+	default:
+		/* Invalid public key algorithm */
+		return -EINVAL;
+	}
+
+	const size_t apdu_len = OPTIGA_RSA_ENCRYPT_MSG_EXT_OVERHEAD + msg_len + pub_key_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (msg_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	if (pub_key_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Message */
+	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
+
+	/* Algorithm Identifier of public key*/
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+
+	/* Public Key */
+	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
+
+	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
+}
+
+#define OPTIGA_RSA_ENCRYPT_OID_EXT_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U8_LEN + TLV_OVERHEAD)
+int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
+				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
+				u8_t *enc_msg, size_t *enc_msg_len)
+{
+	__ASSERT(ctx != NULL && pub_key != NULL && enc_msg != NULL, "No NULL parameters allowed");
+	switch(alg) {
+	case OPTRUST_ALGORITHM_RSA_1024:
+	case OPTRUST_ALGORITHM_RSA_2048:
+		break;
+	default:
+		/* Invalid public key algorithm */
+		return -EINVAL;
+	}
+
+	const size_t apdu_len = OPTIGA_RSA_ENCRYPT_OID_EXT_OVERHEAD + pub_key_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (pub_key_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* OID */
+	tx_buf += set_tlv_u16(tx_buf, 0x02, oid);
+
+	/* Algorithm Identifier of public key*/
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+
+	/* Public Key */
+	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
+
+	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
+}
+
+#define OPTIGA_RSA_ENCRYPT_MSG_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)
+int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
+				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len)
+{
+	__ASSERT(ctx != NULL && msg != NULL && enc_msg != NULL, "No NULL parameters allowed");
+
+	const size_t apdu_len = OPTIGA_RSA_ENCRYPT_MSG_OID_OVERHEAD + msg_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	if (msg_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Message */
+	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
+
+	/* Public Key Certificate OID */
+	tx_buf += set_tlv_u16(tx_buf, 0x04, cert_oid);
+
+	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
+}
+
+#define OPTIGA_RSA_ENCRYPT_OID_OID_LEN (OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U16_LEN)
+int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
+				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len)
+{
+	__ASSERT(ctx != NULL && enc_msg != NULL, "No NULL parameters allowed");
+
+	if (ctx->apdu_buf_len < OPTIGA_RSA_ENCRYPT_OID_OID_LEN) {
+		/* APDU buffer not big enough */
+		return -ENOMEM;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Message OID */
+	tx_buf += set_tlv_u16(tx_buf, 0x02, msg_oid);
+
+	/* Public Key Certificate OID */
+	tx_buf += set_tlv_u16(tx_buf, 0x04, cert_oid);
+
+	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
 }
