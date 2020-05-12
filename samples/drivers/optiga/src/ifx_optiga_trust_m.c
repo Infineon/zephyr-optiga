@@ -1520,6 +1520,59 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 	return 0;
 }
 
+#define OPTIGA_RNG_GEN_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + 2 + SET_TLV_U16_LEN)
+int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, const u8_t *prepend, size_t prepend_len)
+{
+	__ASSERT(ctx != NULL, "No NULL parameters allowed");
+	__ASSERT(rnd_len > 0, "Can't generate 0 random bytes");
+
+	if (prepend == NULL) {
+		prepend_len = 0;
+	}
+
+	const size_t apdu_len = OPTIGA_RNG_GEN_OID_OVERHEAD + prepend_len;
+	if (apdu_len > ctx->apdu_buf_len) {
+		/* APDU buffer to small */
+		return -ENOMEM;
+	}
+
+	if (rnd_len < 0x08 || rnd_len > 0x100) {
+		/* Requesting invalid amount of bytes */
+		return -EINVAL;
+	}
+
+	if (prepend_len > U16_MAX) {
+		/* Overflow in length field */
+		return -EINVAL;
+	}
+
+	/* Skip to APDU inData field */
+	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+
+	/* Length of random stream */
+	sys_put_be16((u16_t) rnd_len, tx_buf);
+	tx_buf += 2;
+
+	/* Optional data to prepend */
+	tx_buf += set_tlv(tx_buf, 0x41, prepend, prepend_len);
+
+	int result_code = cmds_submit_apdu(ctx,
+						tx_buf,
+						OPTIGA_TRUSTM_CMD_GET_RANDOM,
+						0x04 /* Pre-Master Secret */);
+
+	if (result_code < 0) {
+		/* Our driver errored */
+		return result_code;
+	} else if (result_code > 0) {
+		/* OPTIGA produced an error code */
+		LOG_INF("GetRandom Error Code: 0x%02x", result_code);
+		return -EIO;
+	}
+
+	return cmds_check_apdu_empty(ctx);
+}
+
 #define OPTIGA_RSA_SIGN_OID_OVERHEAD (OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + SET_TLV_U16_LEN)
 int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
 			const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len)

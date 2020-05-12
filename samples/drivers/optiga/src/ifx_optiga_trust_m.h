@@ -221,6 +221,18 @@ enum OPTRUST_RNG_TYPE {
 int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
 
 /**
+ * @brief Generate random bytes and store them in an OID
+ * @param ctx Command context to use
+ * @param rnd_len Number of random bytes to generate
+ * @param prepend Data to prepend to random data, may be NULL
+ * @param prepend_len Length of prepend, may be 0
+ * @return 0 on success, error code otherwise
+ *
+ * @note This function is intended to generate a Pre-Master Secret and limited in its functionality. See "Table 12 - GetRandom Coding" for details.
+ */
+int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, const u8_t *prepend, size_t prepend_len);
+
+/**
  * @brief Perform an ECDH operation on a public and private key to derive a shared secret and store it in a session context
  *
   *
