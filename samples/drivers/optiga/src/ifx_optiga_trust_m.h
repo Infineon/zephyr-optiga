@@ -13,8 +13,12 @@
 
 #include <drivers/crypto/optiga.h>
 
-// TODO(chr): find the maximum APDU size value
-#define OPTRUST_MAX_APDU_SIZE 1600
+/* Size of the APDU buffer to read the device certificate at once */
+#define OPTRUST_CERT_READ_APDU_SIZE (1728 + 4)
+/* Size of the APDU buffer to read/write a large (type 2) data object at once */
+#define OPTRUST_DATA_OBJECT_LARGE_APDU_SIZE (1500 + 8)
+/* Size of the APDU buffer to read/write a small (type 3) data object at once */
+#define OPTRUST_DATA_OBJECT_SMALL_APDU_SIZE (140 + 8)
 
 struct optrust_ctx {
 	struct device *dev;
