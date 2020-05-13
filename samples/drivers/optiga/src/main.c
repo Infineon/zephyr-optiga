@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(main);
 struct device *dev = NULL;
 
 /* APDU buffer for the command library */
-static u8_t apdu_buf[OPTRUST_MAX_APDU_SIZE] = {0};
+static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = {0};
 
 /* Buffer for the device certificate of the OPTIGA */
 #define CERT_BUFFER_LEN 1024
@@ -49,7 +49,7 @@ void main(void)
 
 	s64_t time_stamp = k_uptime_get();
 	/* Initialize the command library */
-	int res = optrust_init(&ctx, dev, apdu_buf, OPTRUST_MAX_APDU_SIZE);
+	int res = optrust_init(&ctx, dev, apdu_buf, OPTRUST_CERT_READ_APDU_SIZE);
 	s32_t milliseconds_spent = k_uptime_delta(&time_stamp);
 
 	LOG_INF("ifx_optiga_trust_init res: %d, took %d ms", res, milliseconds_spent);

@@ -92,7 +92,7 @@ test_ret_t test_fcs(void)
 extern struct device *dev;
 
 /* APDU buffer for the command library */
-static u8_t apdu_buf[OPTRUST_MAX_APDU_SIZE] = {0};
+static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = {0};
 /* Command library context */
 struct optrust_ctx ctx;
 
@@ -438,7 +438,7 @@ test_ret_t invalid_apdu_queued(void)
 test_ret_t init_command_lib(void)
 {
 	/* Initialize the command library */
-	int res = optrust_init(&ctx, dev, apdu_buf, OPTRUST_MAX_APDU_SIZE);
+	int res = optrust_init(&ctx, dev, apdu_buf, OPTRUST_CERT_READ_APDU_SIZE);
 	return res ? FAIL : PASS;
 }
 
