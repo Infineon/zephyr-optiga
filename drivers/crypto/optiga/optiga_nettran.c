@@ -8,9 +8,8 @@
 #include "crypto_optiga.h"
 #include "optiga_data.h"
 
-#define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(optiga_nettran);
+LOG_MODULE_REGISTER(optiga_nettran, CONFIG_CRYPTO_LOG_LEVEL);
 
 #define OPTIGA_NETTRAN_PCTR_CHAIN_MASK 0x07
 #define OPTIGA_NETTRAN_PCTR_OFFSET 0

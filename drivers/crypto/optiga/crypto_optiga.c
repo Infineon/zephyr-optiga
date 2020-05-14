@@ -14,9 +14,8 @@
 
 #include "crypto_optiga.h"
 
-#define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(optiga);
+LOG_MODULE_REGISTER(optiga, CONFIG_CRYPTO_LOG_LEVEL);
 
 #define OPTIGA_SHIELD_STACK_ADDITION (64)
 

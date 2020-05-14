@@ -10,9 +10,8 @@
 #include <drivers/i2c.h>
 #include <sys/byteorder.h>
 
-#define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(optiga_phy);
+LOG_MODULE_REGISTER(optiga_phy, CONFIG_CRYPTO_LOG_LEVEL);
 
 /* Protocol limits from Table 2-1 */
 #define OPTIGA_DATA_REG_LEN_MAX 0xFFFF

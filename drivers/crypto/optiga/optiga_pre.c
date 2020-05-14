@@ -14,9 +14,8 @@
 #include <mbedtls/md.h>
 #include <mbedtls/ccm.h>
 
-#define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(optiga_pre);
+LOG_MODULE_REGISTER(optiga_pre, CONFIG_CRYPTO_LOG_LEVEL);
 
 enum OPTIGA_PRE_SCTR_PROTOCOL {
 	OPTIGA_PRE_SCTR_PROTOCOL_HANDSHAKE  = 0x00 << 5,

@@ -10,9 +10,8 @@
 
 #include <sys/byteorder.h>
 
-#define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(optiga_data);
+LOG_MODULE_REGISTER(optiga_data, CONFIG_CRYPTO_LOG_LEVEL);
 
 /* Length in bytes of the fields in a frame, see Figure 3-1 in protocol specification */
 #define OPTIGA_DATA_FCTR_LEN 1
