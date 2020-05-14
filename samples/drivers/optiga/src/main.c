@@ -94,7 +94,7 @@ void main(void)
 	LOG_HEXDUMP_INF(cert_buf, cert_len, "Full Certificate:");
 
 
-	k_sleep(100);
+	k_msleep(100);
 
 	/* Write the stripped device certificate to another data object */
 	time_stamp = k_uptime_get();
@@ -102,7 +102,7 @@ void main(void)
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 
 	LOG_INF("ifx_optiga_data_set res: %d, took %d ms", res, milliseconds_spent);
-	k_sleep(100);
+	k_msleep(100);
 
 	/* Read the stripped device certificate */
 	cert_len = CERT_BUFFER_LEN;
@@ -128,7 +128,7 @@ void main(void)
 	LOG_INF("ifx_optiga_ecdsa_sign_oid res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(signature, OPTRUST_NIST_P256_SIGNATURE_LEN, "Signature:");
 
-	k_sleep(100);
+	k_msleep(100);
 
 	time_stamp = k_uptime_get();
 

@@ -71,7 +71,7 @@ test_ret_t run_timed(test_function_t func, const char* name)
 	u32_t us = TO_US(us_passed) % 1000;
 	LOG_INF(RES_FMT, RES_STR(res), name, ms, us);
 	/* Let logger process */
-	k_sleep(50);
+	k_msleep(50);
 
 	return res;
 }

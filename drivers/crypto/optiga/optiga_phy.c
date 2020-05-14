@@ -35,17 +35,17 @@ LOG_MODULE_REGISTER(optiga_phy);
 #define OPTIGA_REG_ADDR_I2C_MODE		0x89
 
 #define OPTIGA_DELAYED_ACK_TRIES 20
-#define OPTIGA_DELAYED_ACK_TIME_MS 8
+#define OPTIGA_DELAYED_ACK_TIME K_MSEC(8)
 
 /* Need 32s timeout here, because RSA2048 key generation takes long */
 #define OPTIGA_STATUS_POLL_TRIES 4000
-#define OPTIGA_STATUS_POLL_TIME_MS 8
+#define OPTIGA_STATUS_POLL_TIME K_MSEC(8)
 
 /* Helper function for late acknowledge write transfers */
 int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
-	const struct optiga_cfg *config = dev->config->config_info;
+	const struct optiga_cfg *config = dev->config_info;
 
 	bool acked = false;
 	int res = 0;
@@ -58,7 +58,7 @@ int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
 			acked = true;
 			break;
 		}
-		k_sleep(OPTIGA_DELAYED_ACK_TIME_MS);
+		k_sleep(OPTIGA_DELAYED_ACK_TIME);
 	}
 
 	if (!acked) {
@@ -84,7 +84,7 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	__ASSERT(len > 0, "Can't read 0 bytes");
 
 	struct optiga_data *driver = dev->driver_data;
-	const struct optiga_cfg *config = dev->config->config_info;
+	const struct optiga_cfg *config = dev->config_info;
 
 	/* select register for read */
 	int res = optiga_late_ack_write(dev, &addr, sizeof(addr));
@@ -104,7 +104,7 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 			acked = true;
 			break;
 		}
-		k_sleep(OPTIGA_DELAYED_ACK_TIME_MS);
+		k_sleep(OPTIGA_DELAYED_ACK_TIME);
 	}
 
 	if (!acked) {
@@ -169,7 +169,7 @@ bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
 		}
 
 		/* give the device more time */
-		k_sleep(OPTIGA_STATUS_POLL_TIME_MS);
+		k_sleep(OPTIGA_STATUS_POLL_TIME);
 	}
 
 	if(!tmp_rdy) {
@@ -181,7 +181,7 @@ bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
 
 int optiga_soft_reset(struct device *dev) {
 	/* ensure host buffer is big enough for reset command */
-	BUILD_ASSERT_MSG((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
+	BUILD_ASSERT((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
 			"Host buffer too small for essential command");
 
 	u8_t* tx_buf = optiga_phy_frame_buf(dev, NULL);
@@ -193,7 +193,7 @@ int optiga_soft_reset(struct device *dev) {
 
 int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len) {
 	/* ensure host buffer is big enough for DATA_REG_LEN command */
-	BUILD_ASSERT_MSG((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
+	BUILD_ASSERT((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
 			"Host buffer too small for essential command");
 
 	u8_t* tx_buf = optiga_phy_frame_buf(dev, NULL);
