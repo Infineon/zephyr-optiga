@@ -94,7 +94,7 @@ extern struct device *dev;
 /* APDU buffer for the command library */
 static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = {0};
 /* Command library context */
-struct optrust_ctx ctx;
+static struct optrust_ctx ctx;
 
 test_ret_t phy_test(void)
 {

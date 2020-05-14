@@ -18,7 +18,8 @@ static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = {0};
 /* Buffer for the device certificate of the OPTIGA */
 #define CERT_BUFFER_LEN 1024
 static u8_t cert_buf[CERT_BUFFER_LEN] = {0};
-size_t cert_len = CERT_BUFFER_LEN;
+static size_t cert_len = CERT_BUFFER_LEN;
+static struct optrust_ctx ctx;
 
 #define DIGEST_LEN 32
 
@@ -27,6 +28,33 @@ size_t cert_len = CERT_BUFFER_LEN;
 
 // set to '1' to run shielded connection tests
 #define SC_TEST 1
+
+static void start_shielded_connection(void)
+{
+	/* Platform Binding Secret used for this example and testing */
+	static const u8_t psk[64] = {
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	};
+
+	s64_t start_time = k_uptime_get();
+
+	/* Set platform binding secret to known value for this example */
+	int res = optrust_data_set(&ctx, 0xE140, true, 0, psk, 64);
+	s64_t milliseconds_spent = k_uptime_delta(&start_time);
+
+	LOG_INF("set platform binding secret res: %d, took %d ms", res, milliseconds_spent);
+
+	start_time = k_uptime_get();
+
+	/* Start shielded connection */
+	res = optrust_shielded_connection_psk_start(&ctx, psk, 64);
+	milliseconds_spent = k_uptime_delta(&start_time);
+
+	LOG_INF("optrust_shielded_connection_psk_start res: %d, took %d ms", res, milliseconds_spent);
+}
 
 void main(void)
 {
@@ -42,10 +70,13 @@ void main(void)
 
 #if RUN_TESTS == 1
 	run_tests();
+
+#if SC_TEST == 1
+	start_shielded_connection();
+	run_tests();
+#endif
 	return;
 #endif
-
-	struct optrust_ctx ctx;
 
 	s64_t time_stamp = k_uptime_get();
 	/* Initialize the command library */
@@ -53,23 +84,6 @@ void main(void)
 	s32_t milliseconds_spent = k_uptime_delta(&time_stamp);
 
 	LOG_INF("ifx_optiga_trust_init res: %d, took %d ms", res, milliseconds_spent);
-#if SC_TEST == 1
-
-	static const u8_t psk[64] = {
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
-		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
-	};
-
-	time_stamp = k_uptime_get();
-	res = optrust_data_set(&ctx, 0xE140, true, 0, psk, 64);
-	milliseconds_spent = k_uptime_delta(&time_stamp);
-
-	LOG_INF("set platform binding secret res: %d, took %d ms", res, milliseconds_spent);
-
-	res = optrust_shielded_connection_psk_start(&ctx, psk, 64);
-	LOG_INF("optrust_shielded_connection_psk_start res: %d, took %d ms", res, 0);
 
 	/* read co-processor UID */
 	cert_len = CERT_BUFFER_LEN;
@@ -80,8 +94,6 @@ void main(void)
 
 	LOG_INF("ifx_optiga_data_get res: %d, took %d ms", res, milliseconds_spent);
 	LOG_HEXDUMP_INF(cert_buf, cert_len, "Co-processor UID:");
-
-#endif
 
 	/* read device certificate */
 	cert_len = CERT_BUFFER_LEN;
@@ -200,8 +212,12 @@ void main(void)
 
 	time_stamp = k_uptime_get();
 
+	static const u8_t test_hash_data[16] = {
+		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, /* 16 bytes data */
+	};
+
 	/* Hash some data */
-	res = optrust_sha256_ext(&ctx, psk, 64, test_digest, &test_digest_len);
+	res = optrust_sha256_ext(&ctx, test_hash_data, 16, test_digest, &test_digest_len);
 	milliseconds_spent = k_uptime_delta(&time_stamp);
 
 	LOG_INF("optrust_sha256_ext res: %d, took %d ms", res, milliseconds_spent);
