@@ -455,10 +455,10 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 						tx_buf,
 						OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
 						0x00 /* Read data */);
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("GetDataObject Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -507,10 +507,10 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *
 						OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT,
 						0x01 /* Read metadata */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("GetDataObject Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -556,10 +556,10 @@ static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_
 						OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
 						(u8_t) param /* Param */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("SetDataObject Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -618,10 +618,10 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
 					OPTIGA_TRUSTM_CMD_SET_PROTECTED,
 					0x01 /* manifest format (CDDL CBOR) */);
 
-	if (res_code < 0) {
+	if (optiga_is_driver_error(res_code)) {
 		/* Our driver errored */
 		return res_code;
-	} else if (res_code > 0) {
+	} else if (optiga_is_device_error(res_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("SetObjectProtected Error Code: 0x%02x", res_code);
 		return -EIO;
@@ -655,10 +655,10 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
 						OPTIGA_TRUSTM_CMD_SET_PROTECTED,
 						0x01 /* manifest format (CDDL CBOR) */);
 
-		if (res_code < 0) {
+		if (optiga_is_driver_error(res_code)) {
 			/* Our driver errored */
 			return res_code;
-		} else if (res_code > 0) {
+		} else if (optiga_is_device_error(res_code)) {
 			/* OPTIGA produced an error code */
 			LOG_INF("SetObjectProtected Error Code: 0x%02x", res_code);
 			return -EIO;
@@ -693,10 +693,10 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
 					OPTIGA_TRUSTM_CMD_SET_PROTECTED,
 					0x01 /* manifest format (CDDL CBOR) */);
 
-	if (res_code < 0) {
+	if (optiga_is_driver_error(res_code)) {
 		/* Our driver errored */
 		return res_code;
-	} else if (res_code > 0) {
+	} else if (optiga_is_device_error(res_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("SetObjectProtected Error Code: 0x%02x", res_code);
 		return -EIO;
@@ -736,10 +736,10 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 						OPTIGA_TRUSTM_CMD_CALC_SIGN,
 						OPTIGA_TRUSTM_SIGNATURE_SCHME_ECDSA_FIPS_186_3);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("CalcSign Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -891,10 +891,10 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
 						OPTIGA_TRUSTM_SIGNATURE_SCHME_ECDSA_FIPS_186_3);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -961,10 +961,10 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
 						OPTIGA_TRUSTM_SIGNATURE_SCHME_ECDSA_FIPS_186_3);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1011,10 +1011,10 @@ int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 						OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
 						alg /* Key algorithm */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("GenKeyPair Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1113,10 +1113,10 @@ static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
 						OPTIGA_TRUSTM_CMD_GEN_KEYPAIR,
 						alg /* Key algorithm */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("GenKeyPair Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1292,10 +1292,10 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
 						OPTIGA_TRUSTM_CMD_CALC_HASH,
 						OPTRUST_ALGORITHM_SHA256 /* Param */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("CalcHash Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1380,10 +1380,10 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 						OPTIGA_TRUSTM_CMD_CALC_HASH,
 						OPTRUST_ALGORITHM_SHA256 /* Param */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("CalcHash Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1485,10 +1485,10 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 						OPTIGA_TRUSTM_CMD_CALC_SSEC,
 						OPTIGA_TRUSTM_KEY_AGREEMENT_ECDH /* Param */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("CalcSSec Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1579,10 +1579,10 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 						OPTIGA_TRUSTM_CMD_CALC_SSEC,
 						OPTIGA_TRUSTM_KEY_AGREEMENT_ECDH /* Param */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("CalcSSec Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1622,10 +1622,10 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 						OPTIGA_TRUSTM_CMD_GET_RANDOM,
 						(u8_t) type /* Param */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("GetRandom Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1690,10 +1690,10 @@ int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, cons
 						OPTIGA_TRUSTM_CMD_GET_RANDOM,
 						0x04 /* Pre-Master Secret */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("GetRandom Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1733,10 +1733,10 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 						OPTIGA_TRUSTM_CMD_CALC_SIGN,
 						(u8_t) scheme);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("CalcSign Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1913,10 +1913,10 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
 						(u8_t) scheme);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -1965,10 +1965,10 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGN
 						OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
 						(u8_t) scheme);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("VerifySign Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -2019,10 +2019,10 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 						OPTIGA_TRUSTM_CMD_DERIVE_KEY,
 						0x01 /* TLS PRF SHA256 according to [RFC5246] */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("DeriveKey Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -2074,10 +2074,10 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
 						OPTIGA_TRUSTM_CMD_DERIVE_KEY,
 						0x01 /* TLS PRF SHA256 according to [RFC5246] */);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("DeriveKey Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -2118,10 +2118,10 @@ int optrust_int_rsa_encrypt_submit(struct optrust_ctx *ctx, u8_t *tx_buf, u8_t *
 						OPTIGA_TRUSTM_CMD_ENCRYPT_ASYM,
 						OPTIGA_TRUSTM_ASYM_CIPHER_RSAES_PKCS1_1_5);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("EncryptAsym Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -2331,10 +2331,10 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 						OPTIGA_TRUSTM_CMD_DECRYPT_ASYM,
 						OPTIGA_TRUSTM_ASYM_CIPHER_RSAES_PKCS1_1_5);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("DecryptAsym Error Code: 0x%02x", result_code);
 		return -EIO;
@@ -2408,10 +2408,10 @@ int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 						OPTIGA_TRUSTM_CMD_DECRYPT_ASYM,
 						OPTIGA_TRUSTM_ASYM_CIPHER_RSAES_PKCS1_1_5);
 
-	if (result_code < 0) {
+	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
 		return result_code;
-	} else if (result_code > 0) {
+	} else if (optiga_is_device_error(result_code)) {
 		/* OPTIGA produced an error code */
 		LOG_INF("DecryptAsym Error Code: 0x%02x", result_code);
 		return -EIO;
