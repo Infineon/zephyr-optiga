@@ -10,8 +10,8 @@ LOG_MODULE_REGISTER(test);
 #include <zephyr.h>
 #include "helpers.h"
 
-#include <drivers/crypto/optiga.h>
-#include "ifx_optiga_trust_m.h"
+#include <drivers/crypto/optiga_apdu.h>
+#include <drivers/crypto/optiga_trust_m.h>
 
 
 /** return types of a testcase */

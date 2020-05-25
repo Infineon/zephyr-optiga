@@ -5,10 +5,11 @@
  */
 
 #include <zephyr.h>
-#include <drivers/crypto/optiga.h>
+#include <drivers/crypto/optiga_apdu.h>
+#include <drivers/crypto/optiga_trust_m.h>
+
 #include <sys/byteorder.h>
 
-#include "ifx_optiga_trust_m.h"
 #include "ecdsa_utils.h"
 
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef IFX_OPTIGA_TRUST_M_H_
-#define IFX_OPTIGA_TRUST_M_H_
+#ifndef ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_TRUST_M_H_
+#define ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_TRUST_M_H_
 
 #include <device.h>
 #include <zephyr.h>
 #include <zephyr/types.h>
 
-#include <drivers/crypto/optiga.h>
+#include <drivers/crypto/optiga_apdu.h>
 
 /* Size of the APDU buffer to read the device certificate at once */
 #define OPTRUST_CERT_READ_APDU_SIZE (1728 + 4)
@@ -556,4 +556,4 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
 				u16_t key_oid,	u16_t dec_oid);
 
-#endif /* IFX_OPTIGA_TRUST_M_H_ */
+#endif /* ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_TRUST_M_H_ */

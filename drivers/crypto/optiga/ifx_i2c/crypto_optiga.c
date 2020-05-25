@@ -10,7 +10,7 @@
 #include <drivers/i2c.h>
 #include <kernel.h>
 #include <zephyr.h>
-#include <drivers/crypto/optiga.h>
+#include <drivers/crypto/optiga_apdu.h>
 
 #include "crypto_optiga.h"
 

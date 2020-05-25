@@ -6,11 +6,11 @@
 
 /**
  * @file
- * @brief Public API for display drivers and applications
+ * @brief Public API for OPTIGA devices at APDU level
  */
 
-#ifndef ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_H_
-#define ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_H_
+#ifndef ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_APDU_H_
+#define ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_APDU_H_
 
 #include <device.h>
 #include <zephyr/types.h>
@@ -91,6 +91,6 @@ static inline int z_impl_optiga_start_shield(struct device *dev, const u8_t *key
 	return api->optiga_start_shield(dev, key, key_len);
 }
 
-#include <syscalls/optiga.h>
+#include <syscalls/optiga_apdu.h>
 
-#endif /* ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_H_ */
+#endif /* ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_APDU_H_ */

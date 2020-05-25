@@ -5,7 +5,7 @@
  */
 
 #include <zephyr.h>
-#include "ifx_optiga_trust_m.h"
+#include <drivers/crypto/optiga_trust_m.h>
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <logging/log.h>
