@@ -19,13 +19,13 @@ static const u8_t get_data_object_apdu[] = {
 		0xE0, 0xC2, /* OID of Coprocessor UID */
 };
 
-void test_find_chip(void)
+static void test_find_chip(void)
 {
 	dev = device_get_binding("trust-m");
 	zassert_not_null(dev, "Device not found");
 }
 
-void test_get_chip_id(void)
+static void test_get_chip_id(void)
 {
 #define TMP_BUF_SIZE 1024
 static u8_t tmp_buf[TMP_BUF_SIZE] = {0};
