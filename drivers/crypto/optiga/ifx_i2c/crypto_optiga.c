@@ -631,6 +631,7 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 
 				/* If shielded connection was enabled, we need to re-handshake*/
 				atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED);
+				state = WORKER_IDLE;
 				break;
 			case WORKER_RESET_LOCK:
 				/* Wait for new APDUs */
