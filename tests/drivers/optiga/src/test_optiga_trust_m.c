@@ -58,7 +58,7 @@ void test_data_object_large(void)
 	/* Read back test data */
 	res = optrust_data_get(&ctx, OPTRUST_OID_DATA_OBJECT_17, 0, tmp_buf, &tmp_buf_len);
 	zassert_equal(res, 0, "Reading test data failed");
-	zassert_equal(tmp_buf_len, test_large_data_obj_len, "Read back size is differen");
+	zassert_equal(tmp_buf_len, test_large_data_obj_len, "Read back size is different");
 	zassert_mem_equal(tmp_buf, test_large_data_obj, tmp_buf_len, "Data doesn't match");
 }
 

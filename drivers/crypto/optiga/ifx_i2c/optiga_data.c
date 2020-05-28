@@ -211,6 +211,7 @@ int optiga_send_ack_frame(struct device *dev)
 	return err;
 }
 
+static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t *recv_frame_len);
 int optiga_data_is_ctrl_frame_available(struct device *dev)
 {
 	u16_t read_len = 0;
