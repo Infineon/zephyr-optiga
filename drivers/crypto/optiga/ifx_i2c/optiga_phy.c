@@ -270,6 +270,8 @@ int optiga_phy_get_i2c_state(struct device *dev, u16_t* read_len, u8_t* state_fl
 		*state_flags = raw[0];
 	}
 
+	LOG_DBG("I2C_STATE: Read len %d, state flags: 0x%02x", sys_get_be16(&raw[2]), raw[0]);
+
 	return 0;
 }
 
@@ -347,7 +349,7 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 	}
 
 	*len = read_len;
-	LOG_HEXDUMP_DBG(data_buf, *len, "PHY read:");
+	LOG_HEXDUMP_DBG(data_buf, *len, "PHY DATA read:");
 	return 0;
 }
 
@@ -359,7 +361,7 @@ int optiga_phy_write_frame(struct device *dev, size_t len)
 		return -EIO;
 	}
 
-	LOG_HEXDUMP_DBG(((struct optiga_data *) dev->driver_data)->phy.host_buf, len + OPTIGA_PHY_HEADER_LEN, "PHY write:");
+	LOG_HEXDUMP_DBG(optiga_phy_frame_buf(dev, NULL), len, "PHY DATA write:");
 
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA, len);
 }
