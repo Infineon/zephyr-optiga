@@ -12,6 +12,7 @@
 LOG_MODULE_REGISTER(optiga_nettran, CONFIG_CRYPTO_LOG_LEVEL);
 
 #define OPTIGA_NETTRAN_PCTR_CHAIN_MASK 0x07
+#define OPTIGA_NETTRAN_PCTR_CHAN_MASK 0xF0
 #define OPTIGA_NETTRAN_PCTR_OFFSET 0
 #define OPTIGA_NETTRAN_PCTR_LEN 1
 #define OPTIGA_NETTRAN_PACKET_OFFSET (OPTIGA_NETTRAN_PCTR_OFFSET + OPTIGA_NETTRAN_PCTR_LEN)
@@ -36,13 +37,18 @@ int optiga_nettran_init(struct device *dev) {
 	return 0;
 }
 
-void optiga_nettran_set_chain(u8_t *frame_start, enum OPTIGA_NETTRAN_PCTR_CHAIN chain_mode)
+static void optiga_nettran_set_chan(u8_t *frame_start, uint8_t chan)
+{
+	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] = (frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_CHAN_MASK) | chan << 4;
+}
+
+static void optiga_nettran_set_chain(u8_t *frame_start, enum OPTIGA_NETTRAN_PCTR_CHAIN chain_mode)
 {
 	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] =
 		(frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_CHAIN_MASK) | chain_mode;
 }
 
-u8_t optiga_nettran_get_chain(u8_t *frame_start)
+static u8_t optiga_nettran_get_chain(u8_t *frame_start)
 {
 	return frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & OPTIGA_NETTRAN_PCTR_CHAIN_MASK;
 }
@@ -69,13 +75,15 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	packet_buf[OPTIGA_NETTRAN_PCTR_OFFSET] = 0;
 
 	struct optiga_data *driver = dev->driver_data;
+	/* Explicitely init CHAN field */
+	optiga_nettran_set_chan(packet_buf, 0);
 	/* Set presence flag for first packet only */
 	optiga_nettran_set_present(packet_buf, driver->nettran.presence_flag);
 	int res = 0;
 
 	/* Handle cases which fit in a single packet */
 	if(len <= max_apdu_size) {
-		/* write header */
+		/* Finish writing header */
 		optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_NONE);
 
 		/* write data */
@@ -107,9 +115,11 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	remaining_len -= max_apdu_size;
 
 	/* Send intermediate packets */
-	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_INTER);
-
 	while(remaining_len > max_apdu_size) {
+		optiga_nettran_set_chan(packet_buf, 0);
+		optiga_nettran_set_present(packet_buf, driver->nettran.presence_flag);
+		optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_INTER);
+
 		memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, max_apdu_size);
 
 		res = optiga_data_send_packet(dev, max_packet_size);
@@ -123,6 +133,8 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	}
 
 	/* Finish chain */
+	optiga_nettran_set_chan(packet_buf, 0);
+	optiga_nettran_set_present(packet_buf, driver->nettran.presence_flag);
 	optiga_nettran_set_chain(packet_buf, OPTIGA_NETTRAN_PCTR_CHAIN_LAST);
 
 	memcpy(packet_buf + OPTIGA_NETTRAN_PACKET_OFFSET, cur_data, remaining_len);
