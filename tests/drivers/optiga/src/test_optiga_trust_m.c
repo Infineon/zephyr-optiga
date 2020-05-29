@@ -62,11 +62,28 @@ void test_data_object_large(void)
 	zassert_mem_equal(tmp_buf, test_large_data_obj, tmp_buf_len, "Data doesn't match");
 }
 
+void test_data_object_small(void)
+{
+	u8_t tmp_buf[OPTRUST_DATA_OBJECT_TYPE3_LEN] = {0};
+	size_t tmp_buf_len = OPTRUST_DATA_OBJECT_TYPE3_LEN;
+
+	/* Fill a data object with test data */
+	int res = optrust_data_set(&ctx, OPTRUST_OID_DATA_OBJECT_1, true, 0, test_small_data_obj, test_small_data_obj_len);
+	zassert_equal(res, 0, "Writing test data failed");
+
+	/* Read back test data */
+	res = optrust_data_get(&ctx, OPTRUST_OID_DATA_OBJECT_1, 0, tmp_buf, &tmp_buf_len);
+	zassert_equal(res, 0, "Reading test data failed");
+	zassert_equal(tmp_buf_len, test_small_data_obj_len, "Read back size is different");
+	zassert_mem_equal(tmp_buf, test_small_data_obj, tmp_buf_len, "Data doesn't match");
+}
+
 void test_optiga_trust_m_main(void)
 {
 	ztest_test_suite(optiga_trust_m_tests,
 		ztest_unit_test(test_init_trust_m),
 		ztest_unit_test(test_get_data_object_small),
+		ztest_unit_test(test_data_object_small),
 		ztest_unit_test(test_data_object_large)
 	);
 
