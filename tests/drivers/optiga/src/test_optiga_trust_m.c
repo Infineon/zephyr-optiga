@@ -166,6 +166,39 @@ void test_sign_verify_bad_sig(void)
 	zassert_false(res == 0, "Verification with wrong hash passed");
 }
 
+/* SHA256 digest of test_small_data_obj */
+static const u8_t digest_ref[OPTRUST_SHA256_DIGEST_LEN] = {
+		0xAF, 0xE4, 0xE1, 0x65, 0x92, 0xD0, 0xF7, 0x95,
+		0xAC, 0x83, 0x31, 0x31, 0xE4, 0x00, 0x13, 0x49,
+		0x1A, 0x72, 0x5A, 0xDB, 0x4D, 0x46, 0xB2, 0x59,
+		0xB6, 0x5B, 0x5B, 0xFC, 0x90, 0xF6, 0xA1, 0xF8,
+	};
+
+void test_sha256_ext(void)
+{
+	u8_t digest_ext[OPTRUST_SHA256_DIGEST_LEN] = {0};
+
+	size_t digest_len = OPTRUST_SHA256_DIGEST_LEN;
+	int res = optrust_sha256_ext(&ctx, test_small_data_obj, test_small_data_obj_len, digest_ext, &digest_len);
+
+	zassert_equal(res, 0, "Hash OID command failed");
+	zassert_equal(digest_len, OPTRUST_SHA256_DIGEST_LEN, "Digest length changed to unexpected value");
+	zassert_mem_equal(digest_ext, digest_ref, OPTRUST_SHA256_DIGEST_LEN, "Different digest computed");
+}
+
+void test_sha256_oid(void)
+{
+	u8_t digest_oid[OPTRUST_SHA256_DIGEST_LEN] = {0};
+
+	size_t digest_len = OPTRUST_SHA256_DIGEST_LEN;
+	int res = optrust_sha256_oid(&ctx, OPTRUST_OID_DATA_OBJECT_1, 0,
+					test_small_data_obj_len, digest_oid, &digest_len);
+
+	zassert_equal(res, 0, "Hash OID command failed");
+	zassert_equal(digest_len, OPTRUST_SHA256_DIGEST_LEN, "Digest length changed to unexpected value");
+	zassert_mem_equal(digest_oid, digest_ref, OPTRUST_SHA256_DIGEST_LEN, "Different digests computed");
+}
+
 
 void test_optiga_trust_m_main(void)
 {
@@ -177,7 +210,9 @@ void test_optiga_trust_m_main(void)
 		ztest_unit_test(test_extract_cert),
 		ztest_unit_test(test_sign_verify_good),
 		ztest_unit_test(test_sign_verify_bad_hash),
-		ztest_unit_test(test_sign_verify_bad_sig)
+		ztest_unit_test(test_sign_verify_bad_sig),
+		ztest_unit_test(test_sha256_ext),
+		ztest_unit_test(test_sha256_oid)
 	);
 
 	ztest_run_test_suite(optiga_trust_m_tests);
