@@ -74,8 +74,8 @@ static void test_invalid_apdu(void)
 {
 #define TMP_BUF_SIZE 100
 	u8_t tmp_buf[TMP_BUF_SIZE] = {0};
-	/* Invalid APDU */
-	static const u8_t invalid_apdu[] = {0x00};
+	/* Invalid Command, minimum APDU length is 4 */
+	static const u8_t invalid_apdu[] = {0x00, 0x00, 0x00, 0x00};
 
 	struct optiga_apdu get_do_txrx = {
 		.tx_buf = invalid_apdu,
@@ -96,7 +96,7 @@ static void test_invalid_apdu(void)
 
 	int res = events[0].signal->result;
 
-	zassert_equal(res != OPTIGA_STATUS_CODE_SUCCESS, 1, "Event returned error code");
+	zassert_equal(res != OPTIGA_STATUS_CODE_SUCCESS, 1, "This command doesn't exist and should fail");
 #undef TMP_BUF_SIZE
 }
 
