@@ -23,7 +23,7 @@ void test_init_trust_m(void)
 	zassert_equal(res, 0, "Expected success return code");
 }
 
-void test_get_data_object_small(void)
+void test_get_uid(void)
 {
 	/* Non-unique data from Coprocessor UID, see "Table 38 - Coprocessor UID OPTIGA™ Trust Family" for details */
 	static const u8_t expected_id[] = {
@@ -82,7 +82,7 @@ void test_optiga_trust_m_main(void)
 {
 	ztest_test_suite(optiga_trust_m_tests,
 		ztest_unit_test(test_init_trust_m),
-		ztest_unit_test(test_get_data_object_small),
+		ztest_unit_test(test_get_uid),
 		ztest_unit_test(test_data_object_small),
 		ztest_unit_test(test_data_object_large)
 	);

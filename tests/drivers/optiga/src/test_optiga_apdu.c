@@ -28,7 +28,7 @@ static void test_find_chip(void)
 static void test_get_chip_id(void)
 {
 #define TMP_BUF_SIZE 1024
-static u8_t tmp_buf[TMP_BUF_SIZE] = {0};
+	u8_t tmp_buf[TMP_BUF_SIZE] = {0};
 	/* Non-unique data from Coprocessor UID, see "Table 38 - Coprocessor UID OPTIGA™ Trust Family" for details */
 	static const u8_t expected_id[] = {
 		0xCD, /* CIM Identifier */
@@ -70,6 +70,36 @@ static u8_t tmp_buf[TMP_BUF_SIZE] = {0};
 #undef TMP_BUF_SIZE
 }
 
+static void test_invalid_apdu(void)
+{
+#define TMP_BUF_SIZE 100
+	u8_t tmp_buf[TMP_BUF_SIZE] = {0};
+	/* Invalid APDU */
+	static const u8_t invalid_apdu[] = {0x00};
+
+	struct optiga_apdu get_do_txrx = {
+		.tx_buf = invalid_apdu,
+		.tx_len = sizeof(invalid_apdu),
+		.rx_buf = tmp_buf,
+		.rx_len = TMP_BUF_SIZE,
+	};
+
+	optiga_enqueue_apdu(dev, &get_do_txrx);
+
+	struct k_poll_event events[1] = {
+        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+                                 K_POLL_MODE_NOTIFY_ONLY,
+                                 &get_do_txrx.finished),
+	};
+
+	k_poll(events, 1, K_FOREVER);
+
+	int res = events[0].signal->result;
+
+	zassert_equal(res != OPTIGA_STATUS_CODE_SUCCESS, 1, "Event returned error code");
+#undef TMP_BUF_SIZE
+}
+
 void test_session_context(void)
 {
 	int token = 0;
@@ -97,6 +127,7 @@ void test_optiga_apdu_main(void)
 		ztest_unit_test(test_find_chip),
 		ztest_unit_test(test_get_chip_id),
 		ztest_unit_test(test_session_context),
+		ztest_unit_test(test_invalid_apdu),
 		ztest_unit_test(test_error_code)
 	);
 
