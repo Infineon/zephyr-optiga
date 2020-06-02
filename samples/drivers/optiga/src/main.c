@@ -68,15 +68,6 @@ void main(void)
 
 	LOG_INF("Found Trust M device");
 
-#if RUN_TESTS == 1
-	run_tests();
-
-#if SC_TEST == 1
-	start_shielded_connection();
-	run_tests();
-#endif
-	return;
-#endif
 
 	s64_t time_stamp = k_uptime_get();
 	/* Initialize the command library */
