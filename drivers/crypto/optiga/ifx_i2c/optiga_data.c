@@ -330,7 +330,7 @@ int optiga_data_send_packet(struct device *dev, size_t len)
 
 	res = optiga_data_is_ctrl_frame_available(dev);
 	if (res < 0) {
-		LOG_ERR("Can't check for controll frame");
+		LOG_ERR("Can't check for control frame");
 		return res;
 	}
 
