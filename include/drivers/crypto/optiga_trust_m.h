@@ -13,12 +13,16 @@
 
 #include <drivers/crypto/optiga_apdu.h>
 
+#define OPTRUST_DATA_OBJECT_TYPE2_LEN	1500
+#define OPTRUST_DATA_OBJECT_TYPE3_LEN	140
+#define OPTRUST_PUB_KEY_CERT_LEN	1728
+
 /* Size of the APDU buffer to read the device certificate at once */
-#define OPTRUST_CERT_READ_APDU_SIZE (1728 + 4)
+#define OPTRUST_CERT_READ_APDU_SIZE (OPTRUST_PUB_KEY_CERT_LEN + 4)
 /* Size of the APDU buffer to read/write a large (type 2) data object at once */
-#define OPTRUST_DATA_OBJECT_LARGE_APDU_SIZE (1500 + 8)
+#define OPTRUST_DATA_OBJECT_LARGE_APDU_SIZE (OPTRUST_DATA_OBJECT_TYPE2_LEN + 8)
 /* Size of the APDU buffer to read/write a small (type 3) data object at once */
-#define OPTRUST_DATA_OBJECT_SMALL_APDU_SIZE (140 + 8)
+#define OPTRUST_DATA_OBJECT_SMALL_APDU_SIZE (OPTRUST_DATA_OBJECT_TYPE3_LEN + 8)
 
 struct optrust_ctx {
 	struct device *dev;
@@ -92,8 +96,7 @@ struct optrust_ctx {
 #define OPTRUST_OID_DATA_OBJECT_17	0xF1E0
 #define OPTRUST_OID_DATA_OBJECT_18	0xF1E1
 
-#define OPTRUST_DATA_OBJECT_TYPE2_LEN	1500
-#define OPTRUST_DATA_OBJECT_TYPE3_LEN	140
+
 
 /* From "Table 6 - Error Codes" */
 enum OPTRUST_M_ERROR {
