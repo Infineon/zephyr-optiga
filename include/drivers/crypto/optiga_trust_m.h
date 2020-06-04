@@ -16,6 +16,7 @@
 #define OPTRUST_DATA_OBJECT_TYPE2_LEN	1500
 #define OPTRUST_DATA_OBJECT_TYPE3_LEN	140
 #define OPTRUST_PUB_KEY_CERT_LEN	1728
+#define OPTRUST_COPROCESSOR_UID_LEN	26
 
 /* Size of the APDU buffer to read the device certificate at once */
 #define OPTRUST_CERT_READ_APDU_SIZE (OPTRUST_PUB_KEY_CERT_LEN + 4)
@@ -96,8 +97,6 @@ struct optrust_ctx {
 #define OPTRUST_OID_DATA_OBJECT_17	0xF1E0
 #define OPTRUST_OID_DATA_OBJECT_18	0xF1E1
 
-
-
 /* From "Table 6 - Error Codes" */
 enum OPTRUST_M_ERROR {
 	OPTRUST_M_ERROR_NO_ERROR = 0x00,
@@ -149,7 +148,6 @@ int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, si
  */
 void optrust_deinit(struct optrust_ctx *ctx);
 
-
 /**
  * @brief Request a wake-lock token
  * @param ctx Context to use
@@ -179,6 +177,9 @@ int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid);
  * @return 0 on success, error code otherwise
  */
 int optrust_session_release(struct optrust_ctx *ctx, u16_t oid);
+
+/* Lenght of the pre-shared key for shielded connection */
+#define OPTRUST_SHIELD_PSK_LEN 64
 
 /**
  * @brief Start shielded connection to Trust M using a pre-shared key
@@ -409,7 +410,7 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
  * @brief Hash data from an OID
  *
  * @param ctx Command context to use
- * @param oid OID to read the data to has
+ * @param oid OID to read the data to hash
  * @param offs Number of bytes to skip befor hashing data
  * @param len Number of bytes to hash
  * @param digest Computed digest
