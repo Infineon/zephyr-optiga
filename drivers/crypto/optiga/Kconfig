@@ -24,4 +24,8 @@ config OPTIGA_HOST_BUFFER_SIZE
 	  
 		It can be set lower to trade performance for RAM.
 
+config OPTIGA_THREAD_PRIORITY
+	int "Priority of the driver thread"
+	default 1
+
 endif # OPTIGA
