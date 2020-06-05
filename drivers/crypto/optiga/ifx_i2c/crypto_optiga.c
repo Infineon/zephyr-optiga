@@ -292,19 +292,24 @@ int optiga_init(struct device *dev)
 
 	const struct optiga_cfg *config = dev->config_info;
 	struct optiga_data *data = dev->driver_data;
-
-	data->gpio = device_get_binding(config->power_label);
-	if (data->gpio == NULL) {
-		LOG_ERR("Failed to get GPIO device");
-		return -EINVAL;
+	if(config->power_label == NULL) {
+		data->gpio = NULL;
+	} else {
+		data->gpio = device_get_binding(config->power_label);
+		if (data->gpio == NULL) {
+			LOG_ERR("Failed to get GPIO device");
+			return -EINVAL;
+		}
 	}
 
-	/* Initialize power pin */
-	gpio_pin_configure(data->gpio, config->power_pin,
-			   GPIO_OUTPUT | config->power_flags);
+	if (data->gpio) {
+		/* Initialize power pin */
+		gpio_pin_configure(data->gpio, config->power_pin,
+				   GPIO_OUTPUT | config->power_flags);
 
-	/* Power on OPTIGA */
-	optiga_power(dev, true);
+		/* Power on OPTIGA */
+		optiga_power(dev, true);
+	}
 
 	data->reset_counter = 0;
 	data->i2c_master = device_get_binding(config->i2c_dev_name);
@@ -469,9 +474,12 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 	while (true) {
 		switch(state) {
 			case WORKER_IDLE:
-				apdu = k_fifo_get(&data->apdu_queue, OPTIGA_HIBERNATE_DELAY);
+				apdu = k_fifo_get(&data->apdu_queue, data->gpio ? OPTIGA_HIBERNATE_DELAY : K_FOREVER);
 				if (apdu == NULL) {
-					/* Hibernate delay elapsed, try to hibernate */
+					/*
+					 * Can only happen with power control.
+					 * Hibernate delay elapsed, try to hibernate
+					 */
 					state = WORKER_HIBERNATE;
 				} else {
 					/* Process the APDU */
@@ -598,7 +606,9 @@ static void optiga_worker(void* arg1, void *arg2, void *arg3)
 				if (data->reset_counter == OPTIGA_MAX_RESET) {
 					/* Final power down */
 					LOG_ERR("Maximum reset count reached, turning off");
-					optiga_power(dev, false);
+					if (data->gpio) {
+						optiga_power(dev, false);
+					}
 					state = WORKER_RESET_LOCK;
 					break;
 				}
@@ -696,15 +706,26 @@ static const struct optiga_api optiga_api_funcs = {
 	.optiga_start_shield = start_shield,
 };
 
-#define OPTIGA_DEVICE(inst)							\
+#define OPTIGA_CFG_INIT_WITH_GPIO(inst)						\
+{										\
+	.i2c_dev_name	= DT_INST_BUS_LABEL(inst),				\
+	.i2c_addr	= DT_INST_REG_ADDR(inst),				\
+	.power_pin	= DT_INST_GPIO_PIN(inst, power_gpios),			\
+	.power_flags	= DT_INST_GPIO_FLAGS(inst, power_gpios),		\
+	.power_label	= DT_INST_GPIO_LABEL(inst, power_gpios),		\
+}
+
+#define OPTIGA_CFG_INIT_WITHOUT_GPIO(inst)					\
+{										\
+	.i2c_dev_name	= DT_INST_BUS_LABEL(inst),				\
+	.i2c_addr	= DT_INST_REG_ADDR(inst),				\
+	.power_label	= NULL,							\
+}
+
+
+#define OPTIGA_DEVICE(inst, cfg)						\
 static K_THREAD_STACK_DEFINE(optiga_##inst##_stack, OPTIGA_STACK_SIZE);		\
-	static const struct optiga_cfg optiga_##inst##_cfg = {			\
-		.i2c_dev_name	= DT_INST_BUS_LABEL(inst),			\
-		.i2c_addr	= DT_INST_REG_ADDR(inst),			\
-		.power_pin	= DT_INST_GPIO_PIN(inst, power_gpios),		\
-		.power_flags	= DT_INST_GPIO_FLAGS(inst, power_gpios),	\
-		.power_label	= DT_INST_GPIO_LABEL(inst, power_gpios),	\
-	};									\
+	static const struct optiga_cfg optiga_##inst##_cfg = cfg;		\
 										\
 static struct optiga_data optiga_##inst##_data = {				\
 		.worker_stack	= optiga_##inst##_stack				\
@@ -715,5 +736,9 @@ DEVICE_AND_API_INIT(optiga, DT_INST_LABEL(inst), &optiga_init,			\
 		    CONFIG_CRYPTO_INIT_PRIORITY, &optiga_api_funcs);
 
 #if DT_NODE_HAS_STATUS(DT_DRV_INST(0), okay)
-OPTIGA_DEVICE(0)
+#if DT_INST_NODE_HAS_PROP(0, power_gpios)
+	OPTIGA_DEVICE(0, OPTIGA_CFG_INIT_WITH_GPIO(0))
+#else
+	OPTIGA_DEVICE(0, OPTIGA_CFG_INIT_WITHOUT_GPIO(0))
+#endif
 #endif

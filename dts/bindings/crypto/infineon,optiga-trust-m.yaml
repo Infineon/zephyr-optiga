@@ -13,4 +13,4 @@ properties:
       type: phandle-array
       required: false
       description: |
-        Power controll for the OPTIGA Trust M. By default HIGH means power on
+        Power control for the OPTIGA Trust M. Logic '1' means power on.
