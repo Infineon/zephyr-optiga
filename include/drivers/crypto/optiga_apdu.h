@@ -18,7 +18,7 @@
 #define OPTIGA_STATUS_CODE_SUCCESS 0
 #define OPTIGA_MAX_SESSION_IDX 31
 
-// TODO(chr): This must match OPTIGA_IGNORE_HIBERNATE in crypto_optiga.h
+/* Sessions numbers lower than this number are ignored when going to hibernate */
 #define OPTIGA_WAKE_LOCK_IGNORED_SESSIONS 8
 
 struct optiga_apdu {

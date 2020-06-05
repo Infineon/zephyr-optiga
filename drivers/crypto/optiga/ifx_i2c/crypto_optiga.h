@@ -15,9 +15,6 @@
 #include <drivers/gpio.h>
 #include <sys/util.h>
 
-#define OPTIGA_IGNORE_HIBERNATE	8
-#define OPTIGA_IGNORE_HIBERNATE_MASK BIT_MASK(OPTIGA_IGNORE_HIBERNATE)
-
 #define OPTIGA_CTX_HANDLE_LEN 8
 
 struct optiga_data {
