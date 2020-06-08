@@ -357,16 +357,18 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
  */
 int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, const u8_t *prepend, size_t prepend_len);
 
+#define OPTRUST_ECDH_SHARED_SECRET_NIST_P256_LEN 32
+#define OPTRUST_ECDH_SHARED_SECRET_NIST_P384_LEN 48
+
 /**
  * @brief Perform an ECDH operation on a public and private key to derive a shared secret and store it in a session context
  *
-  *
  * @param ctx Command context to use
  * @param sec_key_oid OID of the private key to use for key derivation
  * @param alg Algorithm identifier of the Public key, must be OPTRUST_ALGORITHM_NIST_P256 or OPTRUST_ALGORITHM_NIST_P383
  * @param pub_key Public key
  * @param pub_key_len Length of pub_key
- * @param shared_secret OID to store the derived key
+ * @param shared_secret Buffer to store the shared secret
  * @param shared_secret_len Length of shared_secret, contains bytes written afterwards
  * @return 0 on success, error code otherwise
  */
@@ -383,7 +385,7 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
  * @param alg Algorithm identifier of the Public key, must be OPTRUST_ALGORITHM_NIST_P256 or OPTRUST_ALGORITHM_NIST_P383
  * @param pub_key Public key
  * @param pub_key_len Length of pub_key
- * @param shared_secret_oid OID to store the derived key
+ * @param shared_secret_oid OID to store the shared secret
  * @return 0 on success, error code otherwise
  */
 int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
