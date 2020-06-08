@@ -15,9 +15,7 @@ struct device *dev = NULL;
 /* APDU buffer for the command library */
 static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = {0};
 
-/* Buffer for the device certificate of the OPTIGA */
-static u8_t cert_buf[OPTRUST_PUB_KEY_CERT_LEN] = {0};
-static size_t cert_len = OPTRUST_PUB_KEY_CERT_LEN;
+/* Context for the command library */
 static struct optrust_ctx ctx;
 
 static void start_shielded_connection(void)
