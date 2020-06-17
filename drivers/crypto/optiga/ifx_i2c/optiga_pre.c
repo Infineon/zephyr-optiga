@@ -18,43 +18,43 @@
 LOG_MODULE_REGISTER(optiga_pre, CONFIG_CRYPTO_LOG_LEVEL);
 
 enum OPTIGA_PRE_SCTR_PROTOCOL {
-	OPTIGA_PRE_SCTR_PROTOCOL_HANDSHAKE  = 0x00 << 5,
-	OPTIGA_PRE_SCTR_PROTOCOL_REC_EXCHG  = 0x01 << 5,
-	OPTIGA_PRE_SCTR_PROTOCOL_ALERT      = 0x02 << 5,
-	OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX = 0x03 << 5,
+	OPTIGA_PRE_SCTR_PROTOCOL_HANDSHAKE      = 0x00 << 5,
+	OPTIGA_PRE_SCTR_PROTOCOL_REC_EXCHG      = 0x01 << 5,
+	OPTIGA_PRE_SCTR_PROTOCOL_ALERT          = 0x02 << 5,
+	OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX     = 0x03 << 5,
 };
 
 /* Handshake messages */
 enum OPTIGA_PRE_SCTR_MSG_HS {
-	OPTIGA_PRE_SCTR_PROTOCOL_HS_HELLO  = 0x00 << 2,
-	OPTIGA_PRE_SCTR_PROTOCOL_HS_KEY_AGREE  = 0x01 << 2,
-	OPTIGA_PRE_SCTR_PROTOCOL_HS_FINISHED  = 0x02 << 2,
+	OPTIGA_PRE_SCTR_PROTOCOL_HS_HELLO       = 0x00 << 2,
+	OPTIGA_PRE_SCTR_PROTOCOL_HS_KEY_AGREE   = 0x01 << 2,
+	OPTIGA_PRE_SCTR_PROTOCOL_HS_FINISHED    = 0x02 << 2,
 };
 
 /* Alert messages */
 enum OPTIGA_PRE_SCTR_MSG_ALERT {
-	OPTIGA_PRE_SCTR_PROTOCOL_ALERT_FATAL  = 0x00 << 2,
-	OPTIGA_PRE_SCTR_PROTOCOL_ALERT_INTEGRITY  = 0x01 << 2,
+	OPTIGA_PRE_SCTR_PROTOCOL_ALERT_FATAL            = 0x00 << 2,
+	OPTIGA_PRE_SCTR_PROTOCOL_ALERT_INTEGRITY        = 0x01 << 2,
 };
 
 /* Manage Context messages */
 enum OPTIGA_PRE_SCTR_MSG_CTX {
-	OPTIGA_PRE_SCTR_MSG_CTX_SAVE  = 0x00 << 2,
-	OPTIGA_PRE_SCTR_MSG_CTX_SAVED  = 0x01 << 2,
-	OPTIGA_PRE_SCTR_MSG_CTX_RESTORE  = 0x02 << 2,
-	OPTIGA_PRE_SCTR_MSG_CTX_RESTORED  = 0x03 << 2,
+	OPTIGA_PRE_SCTR_MSG_CTX_SAVE            = 0x00 << 2,
+	OPTIGA_PRE_SCTR_MSG_CTX_SAVED           = 0x01 << 2,
+	OPTIGA_PRE_SCTR_MSG_CTX_RESTORE         = 0x02 << 2,
+	OPTIGA_PRE_SCTR_MSG_CTX_RESTORED        = 0x03 << 2,
 };
 
 /* Protection flags */
 enum OPTIGA_PRE_SCTR_PROTECTION {
-	OPTIGA_PRE_SCTR_PROTECTION_MASTER = 0x01,
-	OPTIGA_PRE_SCTR_PROTECTION_SLAVE = 0x02,
+	OPTIGA_PRE_SCTR_PROTECTION_MASTER       = 0x01,
+	OPTIGA_PRE_SCTR_PROTECTION_SLAVE        = 0x02,
 };
 
 /* See table 6-3 in IFX I2C Protocol specification */
 enum OPTIGA_PRE_PVER {
-	OPTIGA_PRE_PVER_PRE_SHARED = 0x01,
-	OPTIGA_PRE_PVER_ECDHE = 0x02,
+	OPTIGA_PRE_PVER_PRE_SHARED      = 0x01,
+	OPTIGA_PRE_PVER_ECDHE           = 0x02,
 };
 
 #define OPTIGA_PRE_SCTR_OFFS 0
@@ -104,8 +104,8 @@ enum OPTIGA_PRE_PVER {
  *       needed for OPTIGA Shielded Connection as constants.
  */
 static inline int tls_prf_sha256(struct present_layer *pres,
-                          const u8_t *random, size_t rlen,
-                          u8_t *dstbuf, size_t dlen)
+				 const u8_t *random, size_t rlen,
+				 u8_t *dstbuf, size_t dlen)
 {
 	size_t nb;
 	size_t i, j, k;
@@ -130,8 +130,8 @@ static inline int tls_prf_sha256(struct present_layer *pres,
 	nb += rlen;
 
 	/*
-	* Compute P_<hash>(secret, label + random)[0..dlen]
-	*/
+	 * Compute P_<hash>(secret, label + random)[0..dlen]
+	 */
 
 	ret = mbedtls_md_setup(&md_ctx, md_info, 1);
 
@@ -143,24 +143,23 @@ static inline int tls_prf_sha256(struct present_layer *pres,
 	mbedtls_md_hmac_update(&md_ctx, hs_buf->tmp + OPTIGA_PRE_SHA256_LEN, nb);
 	mbedtls_md_hmac_finish(&md_ctx, hs_buf->tmp);
 
-	for( i = 0; i < dlen; i += OPTIGA_PRE_SHA256_LEN )
-	{
-		mbedtls_md_hmac_reset (&md_ctx);
+	for (i = 0; i < dlen; i += OPTIGA_PRE_SHA256_LEN) {
+		mbedtls_md_hmac_reset(&md_ctx);
 		mbedtls_md_hmac_update(&md_ctx, hs_buf->tmp, OPTIGA_PRE_SHA256_LEN + nb);
 		mbedtls_md_hmac_finish(&md_ctx, hs_buf->h_i);
 
-		mbedtls_md_hmac_reset (&md_ctx);
+		mbedtls_md_hmac_reset(&md_ctx);
 		mbedtls_md_hmac_update(&md_ctx, hs_buf->tmp, OPTIGA_PRE_SHA256_LEN);
 		mbedtls_md_hmac_finish(&md_ctx, hs_buf->tmp);
 
 		k = (i + OPTIGA_PRE_SHA256_LEN > dlen) ? dlen % OPTIGA_PRE_SHA256_LEN : OPTIGA_PRE_SHA256_LEN;
 
-		for(j = 0; j < k; j++) {
-			dstbuf[i + j]  = hs_buf->h_i[j];
+		for (j = 0; j < k; j++) {
+			dstbuf[i + j] = hs_buf->h_i[j];
 		}
 	}
 
-	mbedtls_md_free( &md_ctx );
+	mbedtls_md_free(&md_ctx);
 
 	/* Zeroing the intermediate data will be done in the handshake function */
 
@@ -175,6 +174,7 @@ static inline int tls_prf_sha256(struct present_layer *pres,
 static bool optiga_pre_seq_max(const u8_t *seq)
 {
 	u32_t tmp = sys_get_be32(seq);
+
 	return tmp == UINT32_MAX;
 }
 
@@ -192,6 +192,7 @@ static bool optiga_pre_seq_inc(u8_t *seq)
 	}
 
 	u32_t tmp = sys_get_be32(seq);
+
 	tmp++;
 	sys_put_be32(tmp, seq);
 	return true;
@@ -229,7 +230,8 @@ void optiga_pre_clear_keys(struct present_layer *pres)
  * @param dev Device to initialize
  * @return 0 on success, error code otherwise
  */
-int optiga_pre_init(struct device *dev) {
+int optiga_pre_init(struct device *dev)
+{
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
 
@@ -247,6 +249,7 @@ int optiga_pre_set_shared_secret(struct device *dev, const u8_t *ssec, size_t ss
 {
 	struct optiga_data *data = dev->driver_data;
 	struct present_layer *pres = &data->present;
+
 	if (ssec == NULL || ssec_len == 0) {
 		optiga_pre_clear_keys(pres);
 	} else {
@@ -326,11 +329,12 @@ static int optiga_pre_derive_keys(struct present_layer *pres)
 	struct optiga_pre_handshake_buf *hs_buf = &pres->buf.hs;
 
 	/* Buffer for the derived secret */
-	u8_t* secret = hs_buf->deriv_secret;
+	u8_t *secret = hs_buf->deriv_secret;
 
 	int res = tls_prf_sha256(pres,
-			hs_buf->rnd, OPTIGA_PRE_RND_LEN,
-			secret, OPTIGA_PRE_DERIVED_SECRET_LEN);
+				 hs_buf->rnd, OPTIGA_PRE_RND_LEN,
+				 secret, OPTIGA_PRE_DERIVED_SECRET_LEN);
+
 	if (res != 0) {
 		return res;
 	}
@@ -405,9 +409,10 @@ int optiga_pre_encrypt(struct present_layer *pres, u8_t sctr, const u8_t *seq, c
 	mbedtls_ccm_init(&pres->aes_ccm_ctx);
 
 	int res = mbedtls_ccm_setkey(&pres->aes_ccm_ctx,
-					MBEDTLS_CIPHER_ID_AES,
-					pres->master_enc_key,
-					OPTIGA_PRE_AES128_KEY_LEN*8);
+				     MBEDTLS_CIPHER_ID_AES,
+				     pres->master_enc_key,
+				     OPTIGA_PRE_AES128_KEY_LEN * 8);
+
 	if (res != 0) {
 		mbedtls_ccm_free(&pres->aes_ccm_ctx);
 		return -EINVAL;
@@ -415,15 +420,15 @@ int optiga_pre_encrypt(struct present_layer *pres, u8_t sctr, const u8_t *seq, c
 
 	/* encrypt payload */
 	res = mbedtls_ccm_encrypt_and_tag(&pres->aes_ccm_ctx, payload_len,
-					pres->master_enc_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
-					pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
-					payload,
-					packet,
-					packet + payload_len, OPTIGA_PRE_MAC_LEN);
+					  pres->master_enc_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
+					  pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
+					  payload,
+					  packet,
+					  packet + payload_len, OPTIGA_PRE_MAC_LEN);
 
 	mbedtls_ccm_free(&pres->aes_ccm_ctx);
 
-	if(res != 0) {
+	if (res != 0) {
 		return -EINVAL;
 	}
 
@@ -472,6 +477,7 @@ static int optiga_pre_decrypt(struct present_layer *pres, const u8_t *in_buf, si
 	}
 
 	const size_t buf_len = in_len - OPTIGA_PRE_OVERHEAD;
+
 	if (buf_len > *payload_len) {
 		/* Not enough memory in output buffer */
 		return -EINVAL;
@@ -481,10 +487,12 @@ static int optiga_pre_decrypt(struct present_layer *pres, const u8_t *in_buf, si
 
 	/* SCTR field */
 	u8_t sctr = *packet;
+
 	packet += OPTIGA_PRE_SCTR_LEN;
 
 	/* SEQ field */
 	const u8_t *seq = packet;
+
 	packet += OPTIGA_PRE_SEQ_LEN;
 
 	/* Assemble associated data */
@@ -492,19 +500,20 @@ static int optiga_pre_decrypt(struct present_layer *pres, const u8_t *in_buf, si
 
 	mbedtls_ccm_init(&pres->aes_ccm_ctx);
 	int res = mbedtls_ccm_setkey(&pres->aes_ccm_ctx, MBEDTLS_CIPHER_ID_AES,
-					pres->master_dec_key,
-					OPTIGA_PRE_AES128_KEY_LEN*8);
+				     pres->master_dec_key,
+				     OPTIGA_PRE_AES128_KEY_LEN * 8);
+
 	if (res != 0) {
 		mbedtls_ccm_free(&pres->aes_ccm_ctx);
 		return -EINVAL;
 	}
 
 	res = mbedtls_ccm_auth_decrypt(&pres->aes_ccm_ctx, buf_len,
-						pres->master_dec_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
-						pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
-						packet,
-						payload,
-						packet + buf_len, OPTIGA_PRE_MAC_LEN);
+				       pres->master_dec_nonce, OPTIGA_PRE_AES128_NONCE_LEN,
+				       pres->assoc_data_buf, OPTIGA_PRE_ASSOC_DATA_LEN,
+				       packet,
+				       payload,
+				       packet + buf_len, OPTIGA_PRE_MAC_LEN);
 
 	/* Free the context also in case of an error */
 	mbedtls_ccm_free(&pres->aes_ccm_ctx);
@@ -539,13 +548,14 @@ int optiga_pre_parse_finished(struct present_layer *pres)
 		return -EINVAL;
 	}
 
-	const u8_t* mseq = &hs_buf->scratch[OPTIGA_PRE_SCTR_LEN];
+	const u8_t *mseq = &hs_buf->scratch[OPTIGA_PRE_SCTR_LEN];
 
 	/* Put MSEQ into master decryption nonce */
 	memcpy(&pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], mseq, OPTIGA_PRE_SEQ_LEN);
 
 	size_t scratch2_len = OPTIGA_PRE_SCRATCH_LEN;
 	int res = optiga_pre_decrypt(pres, hs_buf->scratch, hs_buf->scratch_len, hs_buf->scratch2, &scratch2_len);
+
 	if (res != 0) {
 		/* decryption/authentication failure */
 		return -EINVAL;
@@ -598,6 +608,7 @@ int optiga_pre_do_handshake(struct device *dev)
 	optiga_pre_assemble_hello(pres);
 
 	int res = optiga_nettran_send_apdu(dev, hs_buf->scratch, hs_buf->scratch_len);
+
 	if (res != 0) {
 		goto cleanup;
 	}
@@ -653,9 +664,9 @@ int optiga_pre_do_handshake(struct device *dev)
 	return 0;
 
 	/* Remove all generated cryptographic data */
-	cleanup:
-		optiga_pre_clear_keys(pres);
-		return res;
+cleanup:
+	optiga_pre_clear_keys(pres);
+	return res;
 }
 
 /**
@@ -680,7 +691,7 @@ int optiga_pre_recv_apdu(struct device *dev, u8_t *apdu, size_t *len)
 			return res;
 		}
 
-		u8_t* sseq = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
+		u8_t *sseq = &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS];
 
 		/* Increment Sequence numbers for exchanged message */
 		if (!optiga_pre_seq_inc(sseq)) {
@@ -688,7 +699,7 @@ int optiga_pre_recv_apdu(struct device *dev, u8_t *apdu, size_t *len)
 			return -EIO;
 		}
 
-		//TODO(chr): check if the sequence number and SCTR are the expected values
+		// TODO(chr): check if the sequence number and SCTR are the expected values
 		return optiga_pre_decrypt(pres, op_buf->encrypted_apdu, op_buf->encrypted_apdu_len, apdu, len);
 	} else {
 		return optiga_nettran_recv_apdu(dev, apdu, len);
@@ -724,7 +735,7 @@ int optiga_pre_send_apdu(struct device *dev, const u8_t *apdu, size_t len)
 		op_buf->encrypted_apdu_len = OPTIGA_PRE_MAX_ENC_APDU_LEN;
 		int res = optiga_pre_encrypt(pres, sctr, mseq, apdu, len, op_buf->encrypted_apdu, &op_buf->encrypted_apdu_len);
 
-		if(res != 0) {
+		if (res != 0) {
 			return -EINVAL;
 		}
 
@@ -751,11 +762,13 @@ int optiga_pre_save_ctx(struct device *dev)
 
 	u8_t sctr = OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_SAVE;
 	int res = optiga_nettran_send_apdu(dev, &sctr, 1);
+
 	if (res != 0) {
 		return res;
 	}
 
 	size_t response_len = 1;
+
 	res = optiga_nettran_recv_apdu(dev, &sctr, &response_len);
 
 	if (sctr != (OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_SAVED)) {
@@ -779,7 +792,7 @@ int optiga_pre_restore_ctx(struct device *dev)
 
 	__ASSERT(optiga_nettran_presence_get(dev), "Shield must be active");
 
-	u8_t packet_buf[5] = {0};
+	u8_t packet_buf[5] = { 0 };
 	u8_t *packet = packet_buf;
 
 	*packet = OPTIGA_PRE_SCTR_PROTOCOL_MANAGE_CTX | OPTIGA_PRE_SCTR_MSG_CTX_RESTORE;
@@ -787,11 +800,13 @@ int optiga_pre_restore_ctx(struct device *dev)
 
 	memcpy(packet, &pres->master_dec_nonce[OPTIGA_PRE_NONCE_SEQ_OFFS], OPTIGA_PRE_SEQ_LEN);
 	int res = optiga_nettran_send_apdu(dev, packet_buf, 5);
+
 	if (res != 0) {
 		return res;
 	}
 
 	size_t response_len = 5;
+
 	res = optiga_nettran_recv_apdu(dev, packet_buf, &response_len);
 	packet = packet_buf;
 

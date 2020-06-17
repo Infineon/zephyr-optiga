@@ -13,10 +13,10 @@
 static struct device *dev = NULL;
 
 static const u8_t get_data_object_apdu[] = {
-		0x81, /* command code */
-		0x00, /* param, read data */
-		0x00, 0x02, /* Length */
-		0xE0, 0xC2, /* OID of Coprocessor UID */
+	0x81,           /* command code */
+	0x00,           /* param, read data */
+	0x00, 0x02,     /* Length */
+	0xE0, 0xC2,     /* OID of Coprocessor UID */
 };
 
 static void test_find_chip(void)
@@ -28,14 +28,14 @@ static void test_find_chip(void)
 static void test_get_chip_id(void)
 {
 #define TMP_BUF_SIZE 1024
-	u8_t tmp_buf[TMP_BUF_SIZE] = {0};
+	u8_t tmp_buf[TMP_BUF_SIZE] = { 0 };
 	/* Non-unique data from Coprocessor UID, see "Table 38 - Coprocessor UID OPTIGA™ Trust Family" for details */
 	static const u8_t expected_id[] = {
-		0xCD, /* CIM Identifier */
-		0x16, /* Platform Identifier */
-		0x33, /* Model Identifier */
-		0x82, 0x01, /* ID of ROM mask */
-		0x00, 0x1C, 0x00, 0x05, 0x00, 0x00, /* Chip type */
+		0xCD,                                   /* CIM Identifier */
+		0x16,                                   /* Platform Identifier */
+		0x33,                                   /* Model Identifier */
+		0x82, 0x01,                             /* ID of ROM mask */
+		0x00, 0x1C, 0x00, 0x05, 0x00, 0x00,     /* Chip type */
 	};
 
 	struct optiga_apdu get_do_txrx = {
@@ -48,9 +48,9 @@ static void test_get_chip_id(void)
 	optiga_enqueue_apdu(dev, &get_do_txrx);
 
 	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &get_do_txrx.finished),
+		K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+					 K_POLL_MODE_NOTIFY_ONLY,
+					 &get_do_txrx.finished),
 	};
 
 	k_poll(events, 1, K_FOREVER);
@@ -73,9 +73,9 @@ static void test_get_chip_id(void)
 static void test_invalid_apdu(void)
 {
 #define TMP_BUF_SIZE 100
-	u8_t tmp_buf[TMP_BUF_SIZE] = {0};
+	u8_t tmp_buf[TMP_BUF_SIZE] = { 0 };
 	/* Invalid Command, minimum APDU length is 4 */
-	static const u8_t invalid_apdu[] = {0x00, 0x00, 0x00, 0x00};
+	static const u8_t invalid_apdu[] = { 0x00, 0x00, 0x00, 0x00 };
 
 	struct optiga_apdu get_do_txrx = {
 		.tx_buf = invalid_apdu,
@@ -87,9 +87,9 @@ static void test_invalid_apdu(void)
 	optiga_enqueue_apdu(dev, &get_do_txrx);
 
 	struct k_poll_event events[1] = {
-        K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
-                                 K_POLL_MODE_NOTIFY_ONLY,
-                                 &get_do_txrx.finished),
+		K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
+					 K_POLL_MODE_NOTIFY_ONLY,
+					 &get_do_txrx.finished),
 	};
 
 	k_poll(events, 1, K_FOREVER);
@@ -104,6 +104,7 @@ void test_session_context(void)
 {
 	int token = 0;
 	bool res = optiga_session_acquire(dev, token);
+
 	zassert_equal(res, true, "Couldn't acquire session token");
 
 	res = optiga_session_acquire(dev, token);
@@ -115,6 +116,7 @@ void test_session_context(void)
 void test_error_code(void)
 {
 	bool res = optiga_is_device_error(OPTIGA_STATUS_CODE_SUCCESS);
+
 	zassert_equal(res, false, "Success reported as device error");
 
 	res = optiga_is_driver_error(OPTIGA_STATUS_CODE_SUCCESS);
@@ -124,12 +126,12 @@ void test_error_code(void)
 void test_optiga_apdu_main(void)
 {
 	ztest_test_suite(optiga_driver_tests,
-		ztest_unit_test(test_find_chip),
-		ztest_unit_test(test_get_chip_id),
-		ztest_unit_test(test_session_context),
-		ztest_unit_test(test_invalid_apdu),
-		ztest_unit_test(test_error_code)
-	);
+			 ztest_unit_test(test_find_chip),
+			 ztest_unit_test(test_get_chip_id),
+			 ztest_unit_test(test_session_context),
+			 ztest_unit_test(test_invalid_apdu),
+			 ztest_unit_test(test_error_code)
+			 );
 
 	ztest_run_test_suite(optiga_driver_tests);
 }

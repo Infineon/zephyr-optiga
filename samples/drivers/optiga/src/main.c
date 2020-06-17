@@ -13,7 +13,7 @@ LOG_MODULE_REGISTER(main);
 struct device *dev = NULL;
 
 /* APDU buffer for the command library */
-static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = {0};
+static u8_t apdu_buf[OPTRUST_CERT_READ_APDU_SIZE] = { 0 };
 
 /* Context for the command library */
 static struct optrust_ctx ctx;
@@ -65,7 +65,7 @@ static void example_rsa()
 	const enum OPTRUST_ALGORITHM key_alg = OPTRUST_ALGORITHM_RSA_2048;
 	const enum OPTRUST_SIGNATURE_SCHEME sig_scheme = OPTRUST_SIGNATURE_SCHEME_PKCS1_v1_5_SHA256;
 
-	u8_t pub_key[OPTRUST_RSA2048_PUB_KEY_LEN] = {0};
+	u8_t pub_key[OPTRUST_RSA2048_PUB_KEY_LEN] = { 0 };
 	size_t pub_key_len = OPTRUST_RSA2048_PUB_KEY_LEN;
 
 	LOG_INF("Generating RSA key pair, this might take a few seconds");
@@ -78,15 +78,15 @@ static void example_rsa()
 
 	/* Sign some data using RSA */
 
-	u8_t signature[OPTRUST_RSA2048_SIGNATURE_LEN] = {0};
+	u8_t signature[OPTRUST_RSA2048_SIGNATURE_LEN] = { 0 };
 	size_t signature_len = OPTRUST_RSA2048_SIGNATURE_LEN;
 
 	start_time = k_uptime_get();
 
 	/* Use the device key to create a signature */
 	res = optrust_rsa_sign_oid(&ctx, sec_key_oid, sig_scheme,
-		test_digest, OPTRUST_SHA256_DIGEST_LEN,
-		signature, &signature_len);
+				   test_digest, OPTRUST_SHA256_DIGEST_LEN,
+				   signature, &signature_len);
 
 	LOG_INF("optrust_rsa_sign_oid res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_HEXDUMP_INF(signature, signature_len, "RSA Signature:");
@@ -95,9 +95,9 @@ static void example_rsa()
 	start_time = k_uptime_get();
 
 	res = optrust_rsa_verify_ext(&ctx, sig_scheme,
-					key_alg, pub_key, pub_key_len,
-					test_digest, OPTRUST_SHA256_DIGEST_LEN,
-					signature, signature_len);
+				     key_alg, pub_key, pub_key_len,
+				     test_digest, OPTRUST_SHA256_DIGEST_LEN,
+				     signature, signature_len);
 
 	LOG_INF("optrust_rsa_verify_ext res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_INF("RSA Verify: %s", res == 0 ? "PASS" : "FAIL");
@@ -114,7 +114,7 @@ static void example_ecc()
 	const u16_t sec_key_oid = OPTRUST_OID_ECC_KEY_2;
 	const enum OPTRUST_KEY_USAGE_FLAG key_usage = OPTRUST_KEY_USAGE_FLAG_SIGN;
 	const enum OPTRUST_ALGORITHM key_alg = OPTRUST_ALGORITHM_NIST_P256;
-	u8_t pub_key[OPTRUST_NIST_P256_PUB_KEY_LEN] = {0};
+	u8_t pub_key[OPTRUST_NIST_P256_PUB_KEY_LEN] = { 0 };
 	size_t pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
 
 	s64_t start_time = k_uptime_get();
@@ -125,14 +125,14 @@ static void example_ecc()
 	LOG_INF("optrust_ecc_gen_keys_oid res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_HEXDUMP_INF(pub_key, OPTRUST_NIST_P256_PUB_KEY_LEN, "Public key:");
 
-	u8_t signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = {0};
+	u8_t signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = { 0 };
 	size_t signature_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
 
 	start_time = k_uptime_get();
 
 	/* Use the secret key to create a signature */
 	res = optrust_ecdsa_sign_oid(&ctx, sec_key_oid, test_digest, OPTRUST_SHA256_DIGEST_LEN,
-		signature, &signature_len);
+				     signature, &signature_len);
 
 	LOG_INF("optrust_ecdsa_sign_oid res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_HEXDUMP_INF(signature, OPTRUST_NIST_P256_SIGNATURE_LEN, "Signature:");
@@ -140,8 +140,8 @@ static void example_ecc()
 	start_time = k_uptime_get();
 	/* Verify the generated signature */
 	res = optrust_ecdsa_verify_ext(&ctx, key_alg, pub_key, pub_key_len,
-		test_digest, OPTRUST_SHA256_DIGEST_LEN,
-		signature, signature_len);
+				       test_digest, OPTRUST_SHA256_DIGEST_LEN,
+				       signature, signature_len);
 	LOG_INF("optrust_ecdsa_verify_ext res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_INF("ECDSA Verify: %s", res == 0 ? "PASS" : "FAIL");
 }
@@ -158,6 +158,7 @@ static void example_session_ctx()
 	/* Acquire a session to temporarily store the key */
 	u16_t sec_key_oid = 0;
 	int res = optrust_session_acquire(&ctx, &sec_key_oid);
+
 	if (res != 0) {
 		LOG_ERR("Failed to request session context");
 		return;
@@ -165,26 +166,26 @@ static void example_session_ctx()
 
 	const enum OPTRUST_KEY_USAGE_FLAG key_usage = OPTRUST_KEY_USAGE_FLAG_SIGN;
 	const enum OPTRUST_ALGORITHM key_alg = OPTRUST_ALGORITHM_NIST_P256;
-	u8_t pub_key[OPTRUST_NIST_P256_PUB_KEY_LEN] = {0};
+	u8_t pub_key[OPTRUST_NIST_P256_PUB_KEY_LEN] = { 0 };
 	size_t pub_key_len = OPTRUST_NIST_P256_PUB_KEY_LEN;
 
 	s64_t start_time = k_uptime_get();
 
 	/* Generate an ECC private key in the session context and export the public key */
 	res = optrust_ecc_gen_keys_oid(&ctx, sec_key_oid, key_alg, key_usage,
-		pub_key, &pub_key_len);
+				       pub_key, &pub_key_len);
 
 	LOG_INF("optrust_ecc_gen_keys_oid res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_HEXDUMP_INF(pub_key, OPTRUST_NIST_P256_PUB_KEY_LEN, "Public key:");
 
-	u8_t signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = {0};
+	u8_t signature[OPTRUST_NIST_P256_SIGNATURE_LEN] = { 0 };
 	size_t signature_len = OPTRUST_NIST_P256_SIGNATURE_LEN;
 
 	start_time = k_uptime_get();
 
 	/* Use the secret key in the session context to create a signature */
 	res = optrust_ecdsa_sign_oid(&ctx, sec_key_oid, test_digest, OPTRUST_SHA256_DIGEST_LEN,
-		signature, &signature_len);
+				     signature, &signature_len);
 
 	LOG_INF("optrust_ecdsa_sign_oid res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_HEXDUMP_INF(signature, OPTRUST_NIST_P256_SIGNATURE_LEN, "Signature:");
@@ -192,8 +193,8 @@ static void example_session_ctx()
 	start_time = k_uptime_get();
 	/* Verify the generated signature */
 	res = optrust_ecdsa_verify_ext(&ctx, key_alg, pub_key, pub_key_len,
-		test_digest, OPTRUST_SHA256_DIGEST_LEN,
-		signature, signature_len);
+				       test_digest, OPTRUST_SHA256_DIGEST_LEN,
+				       signature, signature_len);
 	LOG_INF("optrust_ecdsa_verify_ext res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 	LOG_INF("ECDSA Verify: %s", res == 0 ? "PASS" : "FAIL");
 
@@ -203,7 +204,7 @@ static void example_session_ctx()
 
 static void example_power()
 {
-	u8_t dummy[1] = {0};
+	u8_t dummy[1] = { 0 };
 	size_t dummy_len = 1;
 
 	/* Read some data to make sure OPTIGA Trust M is awake */
@@ -235,7 +236,7 @@ void main(void)
 
 	LOG_INF("ifx_optiga_trust_init res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 
-	u8_t coprocessor_uid[OPTRUST_COPROCESSOR_UID_LEN] = {0};
+	u8_t coprocessor_uid[OPTRUST_COPROCESSOR_UID_LEN] = { 0 };
 	size_t coprocessor_uid_len = OPTRUST_COPROCESSOR_UID_LEN;
 
 	start_time = k_uptime_get();

@@ -22,16 +22,16 @@ LOG_MODULE_REGISTER(optiga_phy, CONFIG_CRYPTO_LOG_LEVEL);
 #endif
 
 /* Register addresses as per protocol specification Table 2-1 */
-#define OPTIGA_REG_ADDR_DATA			0x80
-#define OPTIGA_REG_ADDR_DATA_REG_LEN		0x81
-#define OPTIGA_REG_ADDR_I2C_STATE		0x82
-#define OPTIGA_REG_ADDR_BASE_ADDR		0x83
-#define OPTIGA_REG_ADDR_MAX_SCL_FREQU		0x84
-#define OPTIGA_REG_ADDR_GUARD_TIME		0x85
-#define OPTIGA_REG_ADDR_TRANS_TIMEOUT		0x86
-#define OPTIGA_REG_ADDR_PWR_SAVE_TIMEOUT	0x87
-#define OPTIGA_REG_ADDR_SOFT_RESET		0x88
-#define OPTIGA_REG_ADDR_I2C_MODE		0x89
+#define OPTIGA_REG_ADDR_DATA                    0x80
+#define OPTIGA_REG_ADDR_DATA_REG_LEN            0x81
+#define OPTIGA_REG_ADDR_I2C_STATE               0x82
+#define OPTIGA_REG_ADDR_BASE_ADDR               0x83
+#define OPTIGA_REG_ADDR_MAX_SCL_FREQU           0x84
+#define OPTIGA_REG_ADDR_GUARD_TIME              0x85
+#define OPTIGA_REG_ADDR_TRANS_TIMEOUT           0x86
+#define OPTIGA_REG_ADDR_PWR_SAVE_TIMEOUT        0x87
+#define OPTIGA_REG_ADDR_SOFT_RESET              0x88
+#define OPTIGA_REG_ADDR_I2C_MODE                0x89
 
 #define OPTIGA_DELAYED_ACK_TRIES 20
 #define OPTIGA_DELAYED_ACK_TIME K_MSEC(8)
@@ -49,8 +49,9 @@ int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
 	bool acked = false;
 	int res = 0;
 	int i = 0;
+
 	/* Try writing until maximum number of tries is reached */
-	for(i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
+	for (i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
 		res = i2c_write(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
 			/* Write transfer successful */
@@ -87,6 +88,7 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 
 	/* select register for read */
 	int res = optiga_late_ack_write(dev, &addr, sizeof(addr));
+
 	if (res != 0) {
 		return res;
 	}
@@ -97,7 +99,8 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
 	/* Read data */
 	bool acked = false;
 	int i = 0;
-	for(i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
+
+	for (i = 0; i < OPTIGA_DELAYED_ACK_TRIES; i++) {
 		res = i2c_read(driver->i2c_master, data, len, config->i2c_addr);
 		if (res == 0) {
 			acked = true;
@@ -154,6 +157,7 @@ bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
 	bool tmp_rdy = false;
 	int i;
 	u8_t reg = 0;
+
 	/* Try only a finite number of times */
 	for (i = 0; i < OPTIGA_STATUS_POLL_TRIES; i++) {
 		int res = optiga_reg_read(dev, OPTIGA_REG_ADDR_I2C_STATE, &reg, 1);
@@ -171,40 +175,46 @@ bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
 		k_sleep(OPTIGA_STATUS_POLL_TIME);
 	}
 
-	if(!tmp_rdy) {
+	if (!tmp_rdy) {
 		LOG_ERR("mask: 0x%02x, expected: 0x%02x, reg: 0x%02x, tries: %d", mask, value, reg, i);
 	}
 
 	return tmp_rdy;
 }
 
-int optiga_soft_reset(struct device *dev) {
+int optiga_soft_reset(struct device *dev)
+{
 	/* ensure host buffer is big enough for reset command */
 	BUILD_ASSERT((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
-			"Host buffer too small for essential command");
+		     "Host buffer too small for essential command");
 
-	u8_t* tx_buf = optiga_phy_frame_buf(dev, NULL);
+	u8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
+
 	sys_put_be16(0, tx_buf);
 
 	LOG_DBG("Performing soft reset");
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
 }
 
-int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len) {
+int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len)
+{
 	/* ensure host buffer is big enough for DATA_REG_LEN command */
 	BUILD_ASSERT((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
-			"Host buffer too small for essential command");
+		     "Host buffer too small for essential command");
 
-	u8_t* tx_buf = optiga_phy_frame_buf(dev, NULL);
+	u8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
+
 	sys_put_be16(data_reg_len, tx_buf);
 	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
 }
 
-int optiga_get_data_reg_len(struct device *dev, u16_t* data_reg_len) {
+int optiga_get_data_reg_len(struct device *dev, u16_t *data_reg_len)
+{
 	__ASSERT(data_reg_len != NULL, "Invalid NULL pointer");
 
-	u8_t raw[2] = {0};
+	u8_t raw[2] = { 0 };
 	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA_REG_LEN, raw, 2);
+
 	if (err != 0) {
 		LOG_ERR("Failed to read DATA_REG_LEN register");
 		return err;
@@ -215,11 +225,13 @@ int optiga_get_data_reg_len(struct device *dev, u16_t* data_reg_len) {
 	return 0;
 }
 
-int optiga_negotiate_data_reg_len(struct device *dev) {
+int optiga_negotiate_data_reg_len(struct device *dev)
+{
 	/* read the value from the device */
 	u16_t data_reg_len = 0;
 	int err = optiga_get_data_reg_len(dev, &data_reg_len);
-	if(err != 0) {
+
+	if (err != 0) {
 		return err;
 	}
 
@@ -231,13 +243,13 @@ int optiga_negotiate_data_reg_len(struct device *dev) {
 	if (data_reg_len > OPTIGA_PHY_DATA_REG_LEN) {
 		/* reduce device value to our maximum value */
 		err = optiga_set_data_reg_len(dev, OPTIGA_PHY_DATA_REG_LEN);
-		if(err != 0) {
+		if (err != 0) {
 			return err;
 		}
 
 		/* read back, to ensure the value is correctly applied */
 		err = optiga_get_data_reg_len(dev, &data_reg_len);
-		if(err != 0) {
+		if (err != 0) {
 			return err;
 		}
 
@@ -247,15 +259,17 @@ int optiga_negotiate_data_reg_len(struct device *dev) {
 	}
 
 	struct optiga_data *driver = dev->driver_data;
+
 	driver->phy.data_reg_len = data_reg_len;
 	LOG_DBG("Negotiated DATA_REG_LEN: %d", data_reg_len);
 	return 0;
 }
 
-int optiga_phy_get_i2c_state(struct device *dev, u16_t* read_len, u8_t* state_flags)
+int optiga_phy_get_i2c_state(struct device *dev, u16_t *read_len, u8_t *state_flags)
 {
-	u8_t raw[4] = {0};
+	u8_t raw[4] = { 0 };
 	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_I2C_STATE, raw, 4);
+
 	if (err != 0) {
 		LOG_DBG("Failed to read DATA_REG_LEN register");
 		return err;
@@ -275,9 +289,11 @@ int optiga_phy_get_i2c_state(struct device *dev, u16_t* read_len, u8_t* state_fl
 	return 0;
 }
 
-int optiga_phy_init(struct device *dev) {
+int optiga_phy_init(struct device *dev)
+{
 	/* bring the device to a known state */
 	int err = optiga_soft_reset(dev);
+
 	if (err != 0) {
 		LOG_ERR("Failed to perform soft reset");
 		return err;
@@ -293,6 +309,7 @@ int optiga_phy_init(struct device *dev) {
 	/* print the state of the device */
 	u16_t read_len = 0;
 	u8_t flags = 0;
+
 	err = optiga_phy_get_i2c_state(dev, &read_len, &flags);
 	if (err != 0) {
 		LOG_ERR("Failed to read I2C_STATE");
@@ -313,7 +330,8 @@ int optiga_phy_init(struct device *dev) {
 inline u8_t *optiga_phy_frame_buf(struct device *dev, size_t *len)
 {
 	struct optiga_data *driver = dev->driver_data;
-	if(len) {
+
+	if (len) {
 		*len = driver->phy.data_reg_len;
 	}
 
@@ -325,13 +343,14 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 	__ASSERT(len, "Invalid NULL pointer");
 
 	/* Don't check BUSY here, because it prevents reading of the last ack frame for an APDU */
-	if(!optiga_poll_status(dev, OPTIGA_I2C_STATE_FLAG_RESP_READY, OPTIGA_I2C_STATE_FLAG_RESP_READY)) {
+	if (!optiga_poll_status(dev, OPTIGA_I2C_STATE_FLAG_RESP_READY, OPTIGA_I2C_STATE_FLAG_RESP_READY)) {
 		LOG_ERR("No response available");
 		return -EIO;
 	}
 
 	u16_t read_len = 0;
 	int err = optiga_phy_get_i2c_state(dev, &read_len, NULL);
+
 	if (err != 0) {
 		LOG_ERR("Failed to get data length");
 		return err;
@@ -355,7 +374,7 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 
 int optiga_phy_write_frame(struct device *dev, size_t len)
 {
-	if(!optiga_poll_status(dev, OPTIGA_I2C_STATE_FLAG_BUSY, 0)) {
+	if (!optiga_poll_status(dev, OPTIGA_I2C_STATE_FLAG_BUSY, 0)) {
 		optiga_phy_get_i2c_state(dev, NULL, NULL);
 		LOG_ERR("BUSY flag not cleared");
 		return -EIO;
