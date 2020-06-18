@@ -17,9 +17,6 @@
 #include <logging/log.h>
 LOG_MODULE_REGISTER(cmds_m);
 
-#define U8_MAX (0xFF)
-#define U16_MAX (0xFFFF)
-
 enum OPTIGA_TRUSTM_CMD {
 	OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT       = 0x81,
 	OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT       = 0x82,
@@ -164,7 +161,7 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx, const uint8_t *apdu_end, en
 
 	const size_t in_data_len = apdu_end - apdu_start - OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
-	if (in_data_len > U16_MAX) {
+	if (in_data_len > UINT16_MAX) {
 		/* Overflow in inData field */
 		return -EINVAL;
 	}
@@ -354,7 +351,7 @@ int optrust_data_get(struct optrust_ctx *ctx, uint16_t oid, size_t offs, uint8_t
 {
 	__ASSERT(ctx != NULL && buf != NULL && len != NULL, "No NULL parameters allowed");
 
-	if (offs > U16_MAX || *len > U16_MAX) {
+	if (offs > UINT16_MAX || *len > UINT16_MAX) {
 		/* Prevent overflow in parameter encoding */
 		return -EINVAL;
 	}
@@ -455,7 +452,7 @@ static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_
 {
 	__ASSERT(ctx != NULL && data != NULL, "No NULL parameters allowed");
 
-	if (offs > U16_MAX) {
+	if (offs > UINT16_MAX) {
 		/* Prevent overflow in parameter encoding */
 		return -EINVAL;
 	}
@@ -527,7 +524,7 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const uint8_t *manife
 	// TODO(chr): check if this function needs to be atomic or if other APDUs can be mixed in
 	__ASSERT(ctx != NULL && manifest != NULL && payload != NULL, "No NULL parameters allowed");
 
-	if (manifest_len > U16_MAX) {
+	if (manifest_len > UINT16_MAX) {
 		/* Prevent overflow in parameter encoding */
 		return -EINVAL;
 	}
@@ -652,7 +649,7 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_t 
 		return -ENOMEM;
 	}
 
-	if (digest_len > U16_MAX) {
+	if (digest_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -753,7 +750,7 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 		return -ENOMEM;
 	}
 
-	if (digest_len > U16_MAX) {
+	if (digest_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -787,7 +784,7 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 	}
 	tx_buf += asn1_sig_len;
 
-	if (asn1_sig_len > U16_MAX) {
+	if (asn1_sig_len > UINT16_MAX) {
 		LOG_ERR("Signature too long");
 		return -EINVAL;
 	}
@@ -804,7 +801,7 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 	}
 
 	/* Algorithm identifier of public key */
-	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
+	__ASSERT(alg >= 0 && alg <= UINT8_MAX, "Invalid algorithm identifer");
 	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public key Tag */
@@ -859,7 +856,7 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_
 		return -ENOMEM;
 	}
 
-	if (digest_len > U16_MAX) {
+	if (digest_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -892,7 +889,7 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_
 	}
 	tx_buf += asn1_sig_len;
 
-	if (asn1_sig_len > U16_MAX) {
+	if (asn1_sig_len > UINT16_MAX) {
 		/* Overflow in signature length field */
 		return -EINVAL;
 	}
@@ -951,7 +948,7 @@ int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST
 	tx_buf += set_tlv_u16(tx_buf, 0x01, oid);
 
 	/* Key usage identifier */
-	__ASSERT(key_usage >= 0 && key_usage <= U8_MAX, "Invalid key usage identifer");
+	__ASSERT(key_usage >= 0 && key_usage <= UINT8_MAX, "Invalid key usage identifer");
 	tx_buf += set_tlv_u8(tx_buf, 0x02, (uint8_t) key_usage);
 
 	int result_code = cmds_submit_apdu(ctx,
@@ -1231,7 +1228,7 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const uint8_t *data, size_t data
 		return -ENOMEM;
 	}
 
-	if (data_len > U16_MAX) {
+	if (data_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -1413,7 +1410,7 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
 
 	/* Algorithm Identifier */
-	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
+	__ASSERT(alg >= 0 && alg <= UINT8_MAX, "Invalid algorithm identifer");
 	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public key Tag */
@@ -1513,7 +1510,7 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
 
 	/* Algorithm Identifier */
-	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
+	__ASSERT(alg >= 0 && alg <= UINT8_MAX, "Invalid algorithm identifer");
 	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public key Tag */
@@ -1640,7 +1637,7 @@ int optrust_rng_gen_oid(struct optrust_ctx *ctx, uint16_t oid, size_t rnd_len, c
 		return -EINVAL;
 	}
 
-	if (prepend_len > U16_MAX) {
+	if (prepend_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -1685,7 +1682,7 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_SIG
 		return -ENOMEM;
 	}
 
-	if (digest_len > U16_MAX) {
+	if (digest_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -1852,17 +1849,17 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 		return -ENOMEM;
 	}
 
-	if (digest_len > U16_MAX) {
+	if (digest_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
 
-	if (signature_len > U16_MAX) {
+	if (signature_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
 
-	if (pub_key_len > U16_MAX) {
+	if (pub_key_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -1877,7 +1874,7 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 	tx_buf += set_tlv(tx_buf, 0x02, signature, (uint16_t) signature_len);
 
 	/* Algorithm Identifier of public key */
-	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
+	__ASSERT(alg >= 0 && alg <= UINT8_MAX, "Invalid algorithm identifer");
 	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public Key */
@@ -1914,12 +1911,12 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_S
 		return -ENOMEM;
 	}
 
-	if (digest_len > U16_MAX) {
+	if (digest_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
 
-	if (signature_len > U16_MAX) {
+	if (signature_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -1966,12 +1963,12 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, uint16_t sec_oid
 		return -ENOMEM;
 	}
 
-	if (deriv_data_len > U16_MAX) {
+	if (deriv_data_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
 
-	if (key_len > U16_MAX) {
+	if (key_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -2022,12 +2019,12 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, uint16_t sec_oid
 		return -ENOMEM;
 	}
 
-	if (key_len > U16_MAX) {
+	if (key_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
 
-	if (deriv_data_len > U16_MAX) {
+	if (deriv_data_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -2163,12 +2160,12 @@ int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const uint8_t *msg, siz
 		return -ENOMEM;
 	}
 
-	if (msg_len > U16_MAX) {
+	if (msg_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
 
-	if (pub_key_len > U16_MAX) {
+	if (pub_key_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -2210,7 +2207,7 @@ int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, uint16_t oid,
 		return -ENOMEM;
 	}
 
-	if (pub_key_len > U16_MAX) {
+	if (pub_key_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -2243,7 +2240,7 @@ int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, siz
 		return -ENOMEM;
 	}
 
-	if (msg_len > U16_MAX) {
+	if (msg_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -2297,7 +2294,7 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, siz
 		return -ENOMEM;
 	}
 
-	if (msg_len > U16_MAX) {
+	if (msg_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
@@ -2373,7 +2370,7 @@ int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const uint8_t *msg, siz
 		return -ENOMEM;
 	}
 
-	if (msg_len > U16_MAX) {
+	if (msg_len > UINT16_MAX) {
 		/* Overflow in length field */
 		return -EINVAL;
 	}
