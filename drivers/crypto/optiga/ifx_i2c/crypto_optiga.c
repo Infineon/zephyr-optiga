@@ -38,7 +38,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3);
 
 #define OPTIGA_GET_ERROR_RESPONSE_LEN 5
 /* GetDataObject command with a special data object storing the error code */
-static const u8_t error_code_apdu[] =
+static const uint8_t error_code_apdu[] =
 {
 	0x01,           /* get DataObject, don't clear error code because we want to read it */
 	0x00,           /* read data */
@@ -91,12 +91,12 @@ int optiga_reset(struct device *dev)
 	return err;
 }
 
-static bool optiga_apdu_is_error(u8_t *apdu_start)
+static bool optiga_apdu_is_error(uint8_t *apdu_start)
 {
 	return apdu_start[OPTIGA_APDU_STA_OFFSET] != OPTIGA_APDU_STA_SUCCESS;
 }
 
-static int optiga_get_error_code(struct device *dev, u8_t *err_code)
+static int optiga_get_error_code(struct device *dev, uint8_t *err_code)
 {
 	__ASSERT(dev, "Invalid NULL pointer");
 	__ASSERT(err_code, "Invalid NULL pointer");
@@ -110,7 +110,7 @@ static int optiga_get_error_code(struct device *dev, u8_t *err_code)
 		return err;
 	}
 
-	u8_t tmp_buf[OPTIGA_GET_ERROR_RESPONSE_LEN] = { 0 };
+	uint8_t tmp_buf[OPTIGA_GET_ERROR_RESPONSE_LEN] = { 0 };
 	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
 
 
@@ -141,7 +141,7 @@ static int optiga_get_error_code(struct device *dev, u8_t *err_code)
 	return 0;
 }
 
-static const u8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
+static const uint8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
 {
 	0xF0,           /* command code */
 	0x00,           /* Param */
@@ -158,9 +158,9 @@ static const u8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
 /*
  * Initializes the application on the OPTIGA chip
  */
-static int optiga_open_application(struct device *dev, const u8_t *handle)
+static int optiga_open_application(struct device *dev, const uint8_t *handle)
 {
-	u8_t tmp_buf[OPTIGA_RESTORE_APPLICATION_LEN] = { 0 };
+	uint8_t tmp_buf[OPTIGA_RESTORE_APPLICATION_LEN] = { 0 };
 	size_t tmp_buf_len = 0;
 	struct optiga_data *data = dev->driver_data;
 
@@ -188,7 +188,7 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 	}
 
 	/* Expected response to "OpenApplication" */
-	static const u8_t resp[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = { 0 };
+	static const uint8_t resp[OPTIGA_OPEN_APPLICATION_RESPONSE_LEN] = { 0 };
 	static const size_t resp_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
 	tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
@@ -209,7 +209,7 @@ static int optiga_open_application(struct device *dev, const u8_t *handle)
 
 #define OPTIGA_CLOSE_APPLICATION_LEN 4
 
-static const u8_t optiga_close_application_apdu[OPTIGA_CLOSE_APPLICATION_LEN] =
+static const uint8_t optiga_close_application_apdu[OPTIGA_CLOSE_APPLICATION_LEN] =
 {
 	0xF1,           /* command code */
 	0x00,           /* Param */
@@ -219,9 +219,9 @@ static const u8_t optiga_close_application_apdu[OPTIGA_CLOSE_APPLICATION_LEN] =
 /* Param value to Hibernate the application */
 #define OPTIGA_CLOSE_APP_PARAM_HIBERNATE 0x01
 
-static int optiga_close_application(struct device *dev, u8_t *handle)
+static int optiga_close_application(struct device *dev, uint8_t *handle)
 {
-	u8_t tmp_buf[OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET] = { 0 };
+	uint8_t tmp_buf[OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET] = { 0 };
 	size_t tmp_buf_len = 0;
 	struct optiga_data *data = dev->driver_data;
 
@@ -575,7 +575,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 			/* Check if APDU signals an error and retrieve it */
 			__ASSERT(apdu->rx_len > 0, "Not enough bytes in APDU");
 			if (optiga_apdu_is_error(apdu->rx_buf)) {
-				u8_t optiga_err_code = 0;
+				uint8_t optiga_err_code = 0;
 				err = optiga_get_error_code(dev, &optiga_err_code);
 				if (err != 0) {
 					LOG_ERR("Failed to receive Error Code: %d", err);
@@ -686,7 +686,7 @@ static void session_release(struct device *dev, int session_idx)
 	atomic_clear_bit(&data->session_reservations, session_idx);
 }
 
-static int start_shield(struct device *dev, const u8_t *key, size_t key_len)
+static int start_shield(struct device *dev, const uint8_t *key, size_t key_len)
 {
 	struct optiga_data *data = dev->driver_data;
 	const bool prev_disabled = atomic_cas(&data->shield_state, OPTIGA_SHIELD_DISABLED, OPTIGA_SHIELD_LOADING_KEY);

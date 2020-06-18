@@ -51,12 +51,12 @@ enum {
  * Inner function of the FCS, initial seed is 0
  * From Appendix 8.1.2 of the protocol specification
  */
-u16_t optiga_data_calc_fcs_core(u16_t seed, u8_t c)
+uint16_t optiga_data_calc_fcs_core(uint16_t seed, uint8_t c)
 {
-	u16_t h1 = (seed ^ c) & 0xFF;
-	u16_t h2 = h1 & 0x0F;
-	u16_t h3 = (h2 << 4) ^ h1;
-	u16_t h4 = h3 >> 4;
+	uint16_t h1 = (seed ^ c) & 0xFF;
+	uint16_t h2 = h1 & 0x0F;
+	uint16_t h3 = (h2 << 4) ^ h1;
+	uint16_t h4 = h3 >> 4;
 
 	return (((((h3 << 1) ^ h4) << 4) ^ h2) << 3) ^ h4 ^ (seed >> 8);
 }
@@ -68,10 +68,10 @@ u16_t optiga_data_calc_fcs_core(u16_t seed, u8_t c)
  * @param len The number of bytes in the frame without the FCS
  * @return Two byte frame check sequence
  */
-u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
+uint16_t optiga_data_frame_calc_fcs(const uint8_t *frame_start, size_t len)
 {
 	/* Initial seed is 0 */
-	u16_t fcs = 0;
+	uint16_t fcs = 0;
 
 	for (size_t i = 0; i < len; i++) {
 		fcs = optiga_data_calc_fcs_core(fcs, frame_start[i]);
@@ -87,12 +87,12 @@ u16_t optiga_data_frame_calc_fcs(const u8_t *frame_start, size_t len)
  * @param len The number of bytes including the FCS
  * @return true if the FCS is correct, else false
  */
-bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
+bool optiga_data_frame_check_fcs(const uint8_t *frame_start, size_t len)
 {
 	__ASSERT(len > OPTIGA_DATA_FCS_LEN, "Not enough bytes");
 
-	u16_t calc_fcs = optiga_data_frame_calc_fcs(frame_start, len - 2);
-	u16_t recv_fcs = sys_get_be16(&frame_start[len - 2]);
+	uint16_t calc_fcs = optiga_data_frame_calc_fcs(frame_start, len - 2);
+	uint16_t recv_fcs = sys_get_be16(&frame_start[len - 2]);
 
 	return calc_fcs == recv_fcs;
 }
@@ -105,9 +105,9 @@ bool optiga_data_frame_check_fcs(const u8_t *frame_start, size_t len)
  *
  * @note The provided buffer must be big enough for the additional OPTIGA_DATA_FCS_LEN bytes
  */
-void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
+void optiga_data_frame_set_fcs(uint8_t *frame_start, size_t len)
 {
-	u16_t fcs = optiga_data_frame_calc_fcs(frame_start, len);
+	uint16_t fcs = optiga_data_frame_calc_fcs(frame_start, len);
 
 	/* Chapter 3.3 says, order of FCS is: Low Byte || High Byte */
 	sys_put_be16(fcs, &frame_start[len]);
@@ -121,7 +121,7 @@ void optiga_data_frame_set_fcs(u8_t *frame_start, size_t len)
  *
  * @note The provided buffer must be big enough to contain the frame header
  */
-void optiga_data_frame_set_len(u8_t *frame_start, u16_t len_value)
+void optiga_data_frame_set_len(uint8_t *frame_start, uint16_t len_value)
 {
 	sys_put_be16(len_value, &frame_start[OPTIGA_DATA_LEN_OFFSET]);
 }
@@ -134,12 +134,12 @@ void optiga_data_frame_set_len(u8_t *frame_start, u16_t len_value)
  *
  * @note The provided buffer must be big enough to contain the frame header
  */
-u16_t optiga_data_frame_get_len(const u8_t *frame_start)
+uint16_t optiga_data_frame_get_len(const uint8_t *frame_start)
 {
 	return sys_get_be16(&frame_start[OPTIGA_DATA_LEN_OFFSET]);
 }
 
-void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8_t frame_ack)
+void optiga_data_frame_set_fctr(uint8_t *frame_start, uint8_t flags, uint8_t frame_nr, uint8_t frame_ack)
 {
 	/* ensure no bits are written outside their fields */
 	__ASSERT(!(flags & ~(OPTIGA_DATA_FCTR_FTYPE_MASK | OPTIGA_DATA_FCTR_SEQCTR_MASK)), "Invalid flags");
@@ -149,22 +149,22 @@ void optiga_data_frame_set_fctr(u8_t *frame_start, u8_t flags, u8_t frame_nr, u8
 	frame_start[OPTIGA_DATA_FCTR_OFFSET] = flags | frame_nr << 2 | frame_ack;
 }
 
-bool optiga_data_is_ctrl_frame(const u8_t *frame_start)
+bool optiga_data_is_ctrl_frame(const uint8_t *frame_start)
 {
 	return (frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_FTYPE_MASK) == OPTIGA_DATA_FCTR_FTYPE_CTRL;
 }
 
-u8_t optiga_data_get_seqctr(const u8_t *frame_start)
+uint8_t optiga_data_get_seqctr(const uint8_t *frame_start)
 {
 	return frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_SEQCTR_MASK;
 }
 
-u8_t optiga_data_get_frame_nr(const u8_t *frame_start)
+uint8_t optiga_data_get_frame_nr(const uint8_t *frame_start)
 {
 	return (frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_FRNR_MASK) >> 2;
 }
 
-u8_t optiga_data_get_ack_nr(const u8_t *frame_start)
+uint8_t optiga_data_get_ack_nr(const uint8_t *frame_start)
 {
 	return frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_ACKNR_MASK;
 }
@@ -179,7 +179,7 @@ u8_t optiga_data_get_ack_nr(const u8_t *frame_start)
 int optiga_send_sync_frame(struct device *dev)
 {
 	size_t buf_len = 0;
-	u8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
+	uint8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
 
 	__ASSERT(buf_len >= OPTIGA_DATA_CRTL_FRAME_LEN, "Send buffer too small for SYNC frame");
 
@@ -194,7 +194,7 @@ int optiga_send_sync_frame(struct device *dev)
 int optiga_send_ack_frame(struct device *dev)
 {
 	size_t buf_len = 0;
-	u8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
+	uint8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
 
 	__ASSERT(buf_len >= OPTIGA_DATA_CRTL_FRAME_LEN, "Send buffer too small for ACK frame");
 
@@ -203,7 +203,7 @@ int optiga_send_ack_frame(struct device *dev)
 	 * the relevant bytes before sending and restore them afterwards.
 	 * This works, because PHY doesn't have trailing bytes in the frame.
 	 */
-	u8_t frame_bak[OPTIGA_DATA_CRTL_FRAME_LEN];
+	uint8_t frame_bak[OPTIGA_DATA_CRTL_FRAME_LEN];
 
 	memcpy(frame_bak, frame, OPTIGA_DATA_CRTL_FRAME_LEN);
 
@@ -221,10 +221,10 @@ int optiga_send_ack_frame(struct device *dev)
 	return err;
 }
 
-static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t *recv_frame_len);
+static int optiga_data_recv_common(struct device *dev, uint8_t **recv_frame, size_t *recv_frame_len);
 int optiga_data_is_ctrl_frame_available(struct device *dev)
 {
-	u16_t read_len = 0;
+	uint16_t read_len = 0;
 	int res = optiga_phy_get_i2c_state(dev, &read_len, NULL);
 
 	if (res != 0) {
@@ -238,7 +238,7 @@ int optiga_data_is_ctrl_frame_available(struct device *dev)
 	return 0;
 }
 
-static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t *recv_frame_len)
+static int optiga_data_recv_common(struct device *dev, uint8_t **recv_frame, size_t *recv_frame_len)
 {
 	int err = optiga_phy_read_frame(dev, recv_frame_len);
 
@@ -254,7 +254,7 @@ static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t
 		return -EIO;
 	}
 
-	u8_t *frame = optiga_phy_frame_buf(dev, NULL);
+	uint8_t *frame = optiga_phy_frame_buf(dev, NULL);
 
 	/* Check FCS */
 	bool fcs_good = optiga_data_frame_check_fcs(frame, *recv_frame_len);
@@ -265,7 +265,7 @@ static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t
 	}
 
 	/* Frame header parsing */
-	u8_t seqctr = optiga_data_get_seqctr(frame);
+	uint8_t seqctr = optiga_data_get_seqctr(frame);
 
 	if (seqctr != OPTIGA_DATA_FCTR_SEQCTR_ACK) {
 		LOG_ERR("Packet not acked");
@@ -273,7 +273,7 @@ static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t
 	}
 
 	/* check ack matches sent frame */
-	u8_t ack_nr = optiga_data_get_ack_nr(frame);
+	uint8_t ack_nr = optiga_data_get_ack_nr(frame);
 	struct optiga_data *driver = dev->driver_data;
 
 	if (driver->data.frame_tx_nr == ack_nr) {
@@ -295,7 +295,7 @@ static int optiga_data_recv_common(struct device *dev, u8_t **recv_frame, size_t
 int optiga_data_recv_ctrl_frame(struct device *dev)
 {
 	size_t ctrl_frame_len = 0;
-	u8_t *ctrl_frame_buf = NULL;
+	uint8_t *ctrl_frame_buf = NULL;
 	int res = optiga_data_recv_common(dev, &ctrl_frame_buf, &ctrl_frame_len);
 
 	if (res != 0) {
@@ -308,7 +308,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 	}
 
 	bool ctrl_frame = optiga_data_is_ctrl_frame(ctrl_frame_buf);
-	u16_t frame_len = optiga_data_frame_get_len(ctrl_frame_buf);
+	uint16_t frame_len = optiga_data_frame_get_len(ctrl_frame_buf);
 
 	if (!ctrl_frame || frame_len != 0) {
 		LOG_ERR("Invalid control frame");
@@ -322,7 +322,7 @@ int optiga_data_recv_ctrl_frame(struct device *dev)
 int optiga_data_send_packet(struct device *dev, size_t len)
 {
 	size_t max_frame_len = 0;
-	u8_t *const frame = optiga_phy_frame_buf(dev, &max_frame_len);
+	uint8_t *const frame = optiga_phy_frame_buf(dev, &max_frame_len);
 
 	if ((len + DATA_LINK_OVERHEAD) > max_frame_len) {
 		LOG_ERR("Packet too big");
@@ -330,8 +330,8 @@ int optiga_data_send_packet(struct device *dev, size_t len)
 	}
 
 	struct optiga_data *driver = dev->driver_data;
-	u8_t *const frame_nr = &driver->data.frame_tx_nr;
-	u8_t *const frame_ack = &driver->data.frame_rx_nr;
+	uint8_t *const frame_nr = &driver->data.frame_tx_nr;
+	uint8_t *const frame_ack = &driver->data.frame_rx_nr;
 
 	/* Assemble frame header */
 	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_DATA | OPTIGA_DATA_FCTR_SEQCTR_ACK, *frame_nr, *frame_ack);
@@ -363,7 +363,7 @@ int optiga_data_send_packet(struct device *dev, size_t len)
 int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 {
 	size_t rx_data_len = 0;
-	u8_t *rx_data_buf = NULL;
+	uint8_t *rx_data_buf = NULL;
 
 	int res = optiga_data_recv_common(dev, &rx_data_buf, &rx_data_len);
 
@@ -372,7 +372,7 @@ int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 	}
 
 	bool ctrl_frame = optiga_data_is_ctrl_frame(rx_data_buf);
-	u16_t frame_len = optiga_data_frame_get_len(rx_data_buf);
+	uint16_t frame_len = optiga_data_frame_get_len(rx_data_buf);
 
 	__ASSERT(ctrl_frame == false, "Unexpected control frame");
 
@@ -418,10 +418,10 @@ int optiga_data_init(struct device *dev)
  *
  * @note Use this way to access the send/receive buffer to avoid copying of the data.
  */
-u8_t *optiga_data_packet_buf(struct device *dev, size_t *len)
+uint8_t *optiga_data_packet_buf(struct device *dev, size_t *len)
 {
 	size_t res_len = 0;
-	u8_t *res_buf = optiga_phy_frame_buf(dev, &res_len);
+	uint8_t *res_buf = optiga_phy_frame_buf(dev, &res_len);
 
 	__ASSERT(res_len > DATA_LINK_OVERHEAD, "PHY layer buffer too small");
 	res_buf += OPTIGA_DATA_HEADER_LEN;

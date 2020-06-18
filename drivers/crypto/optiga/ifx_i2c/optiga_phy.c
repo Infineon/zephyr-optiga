@@ -41,7 +41,7 @@ LOG_MODULE_REGISTER(optiga_phy, CONFIG_CRYPTO_LOG_LEVEL);
 #define OPTIGA_STATUS_POLL_TIME K_MSEC(8)
 
 /* Helper function for late acknowledge write transfers */
-int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
+int optiga_late_ack_write(struct device *dev, const uint8_t *data, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
 	const struct optiga_cfg *config = dev->config_info;
@@ -79,7 +79,7 @@ int optiga_late_ack_write(struct device *dev, const u8_t *data, size_t len)
  * @param len Number of bytes to read from the register
  * @note data must be at least len bytes
  */
-int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
+int optiga_reg_read(struct device *dev, uint8_t addr, uint8_t *data, size_t len)
 {
 	__ASSERT(len > 0, "Can't read 0 bytes");
 
@@ -126,7 +126,7 @@ int optiga_reg_read(struct device *dev, u8_t addr, u8_t *data, size_t len)
  * @param len Number of bytes to write to the register
  * @note The data to write is taken from the host buffer to avoid copies.
  */
-int optiga_reg_write(struct device *dev, u8_t addr, size_t len)
+int optiga_reg_write(struct device *dev, uint8_t addr, size_t len)
 {
 	struct optiga_data *driver = dev->driver_data;
 
@@ -152,11 +152,11 @@ int optiga_reg_write(struct device *dev, u8_t addr, size_t len)
  * @param value Expected value
  * @return True if the expecte value was retrieved, false on timeout or error
  */
-bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
+bool optiga_poll_status(struct device *dev, uint8_t mask, uint8_t value)
 {
 	bool tmp_rdy = false;
 	int i;
-	u8_t reg = 0;
+	uint8_t reg = 0;
 
 	/* Try only a finite number of times */
 	for (i = 0; i < OPTIGA_STATUS_POLL_TRIES; i++) {
@@ -185,34 +185,34 @@ bool optiga_poll_status(struct device *dev, u8_t mask, u8_t value)
 int optiga_soft_reset(struct device *dev)
 {
 	/* ensure host buffer is big enough for reset command */
-	BUILD_ASSERT((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
+	BUILD_ASSERT((sizeof(uint16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
 		     "Host buffer too small for essential command");
 
-	u8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
+	uint8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
 
 	sys_put_be16(0, tx_buf);
 
 	LOG_DBG("Performing soft reset");
-	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(uint16_t));
 }
 
-int optiga_set_data_reg_len(struct device *dev, u16_t data_reg_len)
+int optiga_set_data_reg_len(struct device *dev, uint16_t data_reg_len)
 {
 	/* ensure host buffer is big enough for DATA_REG_LEN command */
-	BUILD_ASSERT((sizeof(u16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
+	BUILD_ASSERT((sizeof(uint16_t) + 1) <= CONFIG_OPTIGA_HOST_BUFFER_SIZE,
 		     "Host buffer too small for essential command");
 
-	u8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
+	uint8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
 
 	sys_put_be16(data_reg_len, tx_buf);
-	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(u16_t));
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(uint16_t));
 }
 
-int optiga_get_data_reg_len(struct device *dev, u16_t *data_reg_len)
+int optiga_get_data_reg_len(struct device *dev, uint16_t *data_reg_len)
 {
 	__ASSERT(data_reg_len != NULL, "Invalid NULL pointer");
 
-	u8_t raw[2] = { 0 };
+	uint8_t raw[2] = { 0 };
 	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_DATA_REG_LEN, raw, 2);
 
 	if (err != 0) {
@@ -228,7 +228,7 @@ int optiga_get_data_reg_len(struct device *dev, u16_t *data_reg_len)
 int optiga_negotiate_data_reg_len(struct device *dev)
 {
 	/* read the value from the device */
-	u16_t data_reg_len = 0;
+	uint16_t data_reg_len = 0;
 	int err = optiga_get_data_reg_len(dev, &data_reg_len);
 
 	if (err != 0) {
@@ -265,9 +265,9 @@ int optiga_negotiate_data_reg_len(struct device *dev)
 	return 0;
 }
 
-int optiga_phy_get_i2c_state(struct device *dev, u16_t *read_len, u8_t *state_flags)
+int optiga_phy_get_i2c_state(struct device *dev, uint16_t *read_len, uint8_t *state_flags)
 {
-	u8_t raw[4] = { 0 };
+	uint8_t raw[4] = { 0 };
 	int err = optiga_reg_read(dev, OPTIGA_REG_ADDR_I2C_STATE, raw, 4);
 
 	if (err != 0) {
@@ -307,8 +307,8 @@ int optiga_phy_init(struct device *dev)
 	}
 
 	/* print the state of the device */
-	u16_t read_len = 0;
-	u8_t flags = 0;
+	uint16_t read_len = 0;
+	uint8_t flags = 0;
 
 	err = optiga_phy_get_i2c_state(dev, &read_len, &flags);
 	if (err != 0) {
@@ -327,7 +327,7 @@ int optiga_phy_init(struct device *dev)
  * @param len If not NULL, return the length of the buffer
  * @return Pointer to the buffer for frame data
  */
-inline u8_t *optiga_phy_frame_buf(struct device *dev, size_t *len)
+inline uint8_t *optiga_phy_frame_buf(struct device *dev, size_t *len)
 {
 	struct optiga_data *driver = dev->driver_data;
 
@@ -348,7 +348,7 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 		return -EIO;
 	}
 
-	u16_t read_len = 0;
+	uint16_t read_len = 0;
 	int err = optiga_phy_get_i2c_state(dev, &read_len, NULL);
 
 	if (err != 0) {
@@ -357,7 +357,7 @@ int optiga_phy_read_frame(struct device *dev, size_t *len)
 	}
 
 	size_t data_buf_len = 0;
-	u8_t *data_buf = optiga_phy_frame_buf(dev, &data_buf_len);
+	uint8_t *data_buf = optiga_phy_frame_buf(dev, &data_buf_len);
 
 	__ASSERT(read_len <= data_buf_len, "Receive buffer too small");
 

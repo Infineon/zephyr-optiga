@@ -15,8 +15,8 @@
 #define OPTIGA_PHY_DATA_REG_LEN (CONFIG_OPTIGA_HOST_BUFFER_SIZE - OPTIGA_PHY_HEADER_LEN)
 
 struct physical_layer {
-	u16_t data_reg_len; /* DATA_REG_LEN negotiated with OPTIGA */
-	u8_t host_buf[CONFIG_OPTIGA_HOST_BUFFER_SIZE];
+	uint16_t data_reg_len; /* DATA_REG_LEN negotiated with OPTIGA */
+	uint8_t host_buf[CONFIG_OPTIGA_HOST_BUFFER_SIZE];
 };
 
 /* Flags in I2C_STATE from protocol specification Table 2-4 */
@@ -30,9 +30,9 @@ enum {
 };
 
 int optiga_phy_init(struct device *dev);
-u8_t *optiga_phy_frame_buf(struct device *dev, size_t *len);
+uint8_t *optiga_phy_frame_buf(struct device *dev, size_t *len);
 int optiga_phy_write_frame(struct device *dev, size_t len);
 int optiga_phy_read_frame(struct device *dev, size_t *len);
-int optiga_phy_get_i2c_state(struct device *dev, u16_t *read_len, u8_t *state_flags);
+int optiga_phy_get_i2c_state(struct device *dev, uint16_t *read_len, uint8_t *state_flags);
 
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PHY_H_ */

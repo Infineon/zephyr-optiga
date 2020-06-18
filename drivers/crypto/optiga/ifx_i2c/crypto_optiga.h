@@ -30,14 +30,14 @@ struct optiga_data {
 	int reset_counter;
 	atomic_t session_reservations;
 	atomic_t shield_state;
-	u8_t hibernate_handle[OPTIGA_CTX_HANDLE_LEN];
+	uint8_t hibernate_handle[OPTIGA_CTX_HANDLE_LEN];
 	bool open;
 };
 
 struct optiga_cfg {
 	const char *i2c_dev_name;
 	const char *power_label;
-	u16_t i2c_addr;
+	uint16_t i2c_addr;
 	gpio_pin_t power_pin;
 	gpio_dt_flags_t power_flags;
 };

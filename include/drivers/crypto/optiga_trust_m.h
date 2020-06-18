@@ -27,7 +27,7 @@
 
 struct optrust_ctx {
 	struct device *dev;
-	u8_t *apdu_buf;
+	uint8_t *apdu_buf;
 	size_t apdu_buf_len;
 	struct optiga_apdu apdu;
 };
@@ -140,7 +140,7 @@ enum OPTRUST_M_ERROR {
  * @param apdu_buf send and receive buffer for the APDU
  * @param apdu_buf_len length of apdu_buf
  */
-int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len);
+int optrust_init(struct optrust_ctx *ctx, struct device *dev, uint8_t *apdu_buf, size_t apdu_buf_len);
 
 /**
  * @brief Deallocate all resources and unbind the command context
@@ -169,14 +169,14 @@ void optrust_wake_lock_release(struct optrust_ctx *ctx, int token);
  * @param oid Returned OID of the assigned session context
  * @return 0 on success, error code otherwise
  */
-int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid);
+int optrust_session_acquire(struct optrust_ctx *ctx, uint16_t *oid);
 
 /**
  * @brief Return a session context
  * @param oid OID of the session context to return
  * @return 0 on success, error code otherwise
  */
-int optrust_session_release(struct optrust_ctx *ctx, u16_t oid);
+int optrust_session_release(struct optrust_ctx *ctx, uint16_t oid);
 
 /* Lenght of the pre-shared key for shielded connection */
 #define OPTRUST_SHIELD_PSK_LEN 64
@@ -187,7 +187,7 @@ int optrust_session_release(struct optrust_ctx *ctx, u16_t oid);
  * @param psk_len Length of psk
  * @return 0 on success, error code otherwise
  */
-int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *psk, size_t psk_len);
+int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const uint8_t *psk, size_t psk_len);
 
 /**
  * @brief Read data from a data object in the OPTIGA
@@ -199,7 +199,7 @@ int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *p
  * @param len Must be set to the length of buf and returns the number of data bytes read
  * @return 0 on success, error code otherwise
  */
-int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len);
+int optrust_data_get(struct optrust_ctx *ctx, uint16_t oid, size_t offs, uint8_t *buf, size_t *len);
 
 /**
  * @brief Update a data object using the "Protected Update" mechanism
@@ -213,7 +213,7 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
  *
  * @note See "Table 11 - SetObjectProtected" Coding for details
  */
-int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest, size_t manifest_len, const u8_t *payload, size_t payload_len);
+int optrust_data_protected_update(struct optrust_ctx *ctx, const uint8_t *manifest, size_t manifest_len, const uint8_t *payload, size_t payload_len);
 
 /**
  * @brief Write data to a data object in the OPTIGA
@@ -226,7 +226,7 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
  * @param len length of buf
  * @return 0 on success, error code otherwise
  */
-int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len);
+int optrust_data_set(struct optrust_ctx *ctx, uint16_t oid, bool erase, size_t offs, const uint8_t *buf, size_t len);
 
 #define OPTRUST_NIST_P256_SEC_KEY_LEN 32
 #define OPTRUST_NIST_P384_SEC_KEY_LEN 48
@@ -261,8 +261,8 @@ enum OPTRUST_KEY_USAGE_FLAG {
  *
  * @note The size of the public key buffer must match the selected algorithm or be bigger.
  */
-int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
-                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
+int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, uint8_t *pub_key, size_t *pub_key_len);
 
 /**
  * @brief Generate an ECDSA key pair and export private and public key
@@ -279,8 +279,8 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
  */
 int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 				enum OPTRUST_ALGORITHM alg,
-				u8_t* priv_key, size_t * priv_key_len,
-				u8_t *pub_key, size_t *pub_key_len);
+				uint8_t* priv_key, size_t * priv_key_len,
+				uint8_t *pub_key, size_t *pub_key_len);
 
 
 #define OPTRUST_NIST_P256_SIGNATURE_LEN 64
@@ -297,7 +297,7 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
  * @param signature_len Length of signature buffer, contains length of signature afterwards.
  * @return 0 on success, error code otherwise
  */
-int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len);
+int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *digest, size_t digest_len, uint8_t *signature, size_t *signature_len);
 
 /**
  * @brief Verify a signature using a public key provided by the host
@@ -313,9 +313,9 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
  * @return 0 if the signature matches, error code otherwise
  */
 int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
-				const u8_t *pub_key, size_t pub_key_len,
-				const u8_t *digest, size_t digest_len,
-				const u8_t *signature, size_t signature_len);
+				const uint8_t *pub_key, size_t pub_key_len,
+				const uint8_t *digest, size_t digest_len,
+				const uint8_t *signature, size_t signature_len);
 
 /**
  * @brief Verify a signature using a public key in the OPTIGA
@@ -328,7 +328,7 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
  * @param signature_len Length of signature
  * @return 0 if the signature matches, error code otherwise
  */
-int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
+int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *digest, size_t digest_len, const uint8_t *signature, size_t signature_len);
 
 enum OPTRUST_RNG_TYPE {
 	OPTRUST_RNG_TYPE_TRNG	= 0x00,
@@ -343,7 +343,7 @@ enum OPTRUST_RNG_TYPE {
  * @param rnd_len Size of the output buffer
  * @return 0 on success, error code otherwise
  */
-int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len);
+int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, uint8_t *rnd, size_t rnd_len);
 
 /**
  * @brief Generate random bytes and store them in an OID
@@ -355,7 +355,7 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
  *
  * @note This function is intended to generate a Pre-Master Secret and limited in its functionality. See "Table 12 - GetRandom Coding" for details.
  */
-int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, const u8_t *prepend, size_t prepend_len);
+int optrust_rng_gen_oid(struct optrust_ctx *ctx, uint16_t oid, size_t rnd_len, const uint8_t *prepend, size_t prepend_len);
 
 #define OPTRUST_ECDH_SHARED_SECRET_NIST_P256_LEN 32
 #define OPTRUST_ECDH_SHARED_SECRET_NIST_P384_LEN 48
@@ -372,10 +372,10 @@ int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, cons
  * @param shared_secret_len Length of shared_secret, contains bytes written afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
+int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 				enum OPTRUST_ALGORITHM alg,
-				const u8_t *pub_key, size_t pub_key_len,
-				u8_t* shared_secret, size_t* shared_secret_len);
+				const uint8_t *pub_key, size_t pub_key_len,
+				uint8_t* shared_secret, size_t* shared_secret_len);
 
 /**
  * @brief Perform an ECDH operation on a public and private key to derive a shared secret and store it in a session context
@@ -388,10 +388,10 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
  * @param shared_secret_oid OID to store the shared secret
  * @return 0 on success, error code otherwise
  */
-int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
+int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 				enum OPTRUST_ALGORITHM alg,
-				const u8_t *pub_key, size_t pub_key_len,
-				u16_t shared_secret_oid);
+				const uint8_t *pub_key, size_t pub_key_len,
+				uint16_t shared_secret_oid);
 
 #define OPTRUST_SHA256_DIGEST_LEN 32
 
@@ -405,8 +405,8 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
  * @param digest_len Length of digest, contains the length of the computed digest afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_len,
-                       u8_t *digest, size_t *digest_len);
+int optrust_sha256_ext(struct optrust_ctx *ctx, const uint8_t* data, size_t data_len,
+                       uint8_t *digest, size_t *digest_len);
 
 /**
  * @brief Hash data from an OID
@@ -420,8 +420,8 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t* data, size_t data_le
  * @return 0 on success, error code otherwise
  */
 int optrust_sha256_oid(struct optrust_ctx *ctx,
-				u16_t oid, size_t offs, size_t len,
-				u8_t *digest, size_t *digest_len);
+				uint16_t oid, size_t offs, size_t len,
+				uint8_t *digest, size_t *digest_len);
 
 
 /**
@@ -432,7 +432,7 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
  * @param data_len Length of the output buffer, contains length of metadata afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t *data_len);
+int optrust_metadata_get(struct optrust_ctx *ctx, uint16_t oid, uint8_t *data, size_t *data_len);
 
 /**
  * @brief Set metadata of a data object
@@ -442,7 +442,7 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *data, size_t 
  * @param data_len length of data
  * @return 0 on success, error code otherwise
  */
-int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len);
+int optrust_metadata_set(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *data, size_t data_len);
 
 /**
  * @brief Increment a monotonic counter
@@ -451,7 +451,7 @@ int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, s
  * @param inc Value by which to increment the counter
  * @return 0 on success, error code otherwise
  */
-int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc);
+int optrust_counter_inc(struct optrust_ctx *ctx, uint16_t oid, uint8_t inc);
 
 /* See Table 26 - Signature Schemes for more information */
 enum OPTRUST_SIGNATURE_SCHEME {
@@ -473,7 +473,7 @@ enum OPTRUST_SIGNATURE_SCHEME {
  * @param signature_len Length of signature buffer, contains length of signature afterwards.
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len);
+int optrust_rsa_sign_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme, const uint8_t *digest, size_t digest_len, uint8_t *signature, size_t *signature_len);
 
 #define OPTRUST_RSA1024_PUB_KEY_LEN 144
 #define OPTRUST_RSA2048_PUB_KEY_LEN 275
@@ -491,8 +491,8 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
  *
  * @note The size of the public key buffer must match the selected algorithm or be bigger.
  */
-int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
-                enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len);
+int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_ALGORITHM alg,
+                enum OPTRUST_KEY_USAGE_FLAG key_usage, uint8_t *pub_key, size_t *pub_key_len);
 
 #define OPTRUST_RSA1024_SEC_KEY_LEN (128+3)
 #define OPTRUST_RSA2048_SEC_KEY_LEN (256+4)
@@ -510,8 +510,8 @@ int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
  * @note The size of the public and private key buffers must match the selected algorithm or be bigger.
  */
 int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
-				u8_t *sec_key, size_t *sec_key_len,
-				u8_t *pub_key, size_t *pub_key_len);
+				uint8_t *sec_key, size_t *sec_key_len,
+				uint8_t *pub_key, size_t *pub_key_len);
 
 /**
  * @brief Verify a RSA signature using a public key provided by the host
@@ -528,9 +528,9 @@ int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
  * @return 0 if the signature matches, error code otherwise
  */
 int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEME scheme,
-				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-				const u8_t *digest, size_t digest_len,
-				const u8_t *signature, size_t signature_len);
+				enum OPTRUST_ALGORITHM alg, const uint8_t *pub_key, size_t pub_key_len,
+				const uint8_t *digest, size_t digest_len,
+				const uint8_t *signature, size_t signature_len);
 
 /**
  * @brief Verify a RSA signature using a public key in the OPTIGA
@@ -543,8 +543,8 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
  * @param signature_len Length of signature
  * @return 0 if the signature matches, error code otherwise
  */
-int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
-				const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len);
+int optrust_rsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
+				const uint8_t *digest, size_t digest_len, const uint8_t *signature, size_t signature_len);
 
 /**
  * @brief Derive a key from a shared secret
@@ -557,8 +557,8 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGN
  * @param key_oid OID to store the derived key
  * @return 0 if the signature matches, error code otherwise
  */
-int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
-				size_t key_len, u16_t key_oid);
+int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
+				size_t key_len, uint16_t key_oid);
 
 /**
  * @brief Derive a key from a shared secret and export the key
@@ -571,8 +571,8 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
  * @param key_len Length of deriv and length of the secret to derive
  * @return 0 if the signature matches, error code otherwise
  */
-int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
-				u8_t *key, size_t key_len);
+int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
+				uint8_t *key, size_t key_len);
 
 /**
  * @brief Encrypt data using a public RSA key
@@ -587,9 +587,9 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-				u8_t *enc_msg, size_t *enc_msg_len);
+int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				enum OPTRUST_ALGORITHM alg, const uint8_t *pub_key, size_t pub_key_len,
+				uint8_t *enc_msg, size_t *enc_msg_len);
 
 /**
  * @brief Encrypt data in an OID using a public RSA public key
@@ -603,9 +603,9 @@ int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
-				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-				u8_t *enc_msg, size_t *enc_msg_len);
+int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, uint16_t oid,
+				enum OPTRUST_ALGORITHM alg, const uint8_t *pub_key, size_t pub_key_len,
+				uint8_t *enc_msg, size_t *enc_msg_len);
 
 /**
  * @brief Encrypt data using a RSA Public Key Certificate from the device
@@ -620,8 +620,8 @@ int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len);
+int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				uint16_t cert_oid,	uint8_t *enc_msg, size_t *enc_msg_len);
 
 /**
  * @brief Encrypt data in an OID using a RSA Public Key Certificate from the device
@@ -635,8 +635,8 @@ int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
-				u16_t cert_oid,	u8_t *enc_msg, size_t *enc_msg_len);
+int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, uint16_t msg_oid,
+				uint16_t cert_oid,	uint8_t *enc_msg, size_t *enc_msg_len);
 
 /**
  * @brief Decrypt a message using a RSA private key from the device
@@ -649,8 +649,8 @@ int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				u16_t key_oid,	u8_t *dec_msg, size_t *dec_msg_len);
+int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				uint16_t key_oid,	uint8_t *dec_msg, size_t *dec_msg_len);
 
 /**
  * @brief Decrypt a message using a RSA private key from the device and store it in an OID
@@ -662,7 +662,7 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
  * @param dec_oid OID to store the decrypted message
  * @return 0 on success, error code otherwise
  */
-int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				u16_t key_oid,	u16_t dec_oid);
+int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				uint16_t key_oid,	uint16_t dec_oid);
 
 #endif /* ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_TRUST_M_H_ */

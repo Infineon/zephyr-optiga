@@ -19,13 +19,13 @@
 #define OPTIGA_DATA_TRAILER_LEN 2
 
 struct data_link_layer {
-	u8_t frame_tx_nr;       /* next transmit frame number */
-	u8_t frame_tx_ack;      /* last received ack number for transmitted frame */
-	u8_t frame_rx_nr;       /* last received frame number */
+	uint8_t frame_tx_nr;       /* next transmit frame number */
+	uint8_t frame_tx_ack;      /* last received ack number for transmitted frame */
+	uint8_t frame_rx_nr;       /* last received frame number */
 };
 
 int optiga_data_init(struct device *dev);
-u8_t *optiga_data_packet_buf(struct device *dev, size_t *len);
+uint8_t *optiga_data_packet_buf(struct device *dev, size_t *len);
 int optiga_data_send_packet(struct device *dev, size_t len);
 int optiga_data_recv_packet(struct device *dev, size_t *data_len);
 

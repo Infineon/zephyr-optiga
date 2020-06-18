@@ -39,39 +39,39 @@ int optiga_nettran_init(struct device *dev)
 	return 0;
 }
 
-static void optiga_nettran_set_chan(u8_t *frame_start, uint8_t chan)
+static void optiga_nettran_set_chan(uint8_t *frame_start, uint8_t chan)
 {
 	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] = (frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_CHAN_MASK) | chan << 4;
 }
 
-static void optiga_nettran_set_chain(u8_t *frame_start, enum OPTIGA_NETTRAN_PCTR_CHAIN chain_mode)
+static void optiga_nettran_set_chain(uint8_t *frame_start, enum OPTIGA_NETTRAN_PCTR_CHAIN chain_mode)
 {
 	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] =
 		(frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_CHAIN_MASK) | chain_mode;
 }
 
-static u8_t optiga_nettran_get_chain(u8_t *frame_start)
+static uint8_t optiga_nettran_get_chain(uint8_t *frame_start)
 {
 	return frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & OPTIGA_NETTRAN_PCTR_CHAIN_MASK;
 }
 
-static void optiga_nettran_set_present(u8_t *frame_start, bool present)
+static void optiga_nettran_set_present(uint8_t *frame_start, bool present)
 {
-	const u8_t tmp = present ? OPTIGA_NETTRAN_PCTR_PRESENT_FLAG : 0;
+	const uint8_t tmp = present ? OPTIGA_NETTRAN_PCTR_PRESENT_FLAG : 0;
 
 	frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] = (frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & ~OPTIGA_NETTRAN_PCTR_PRESENT_FLAG) | tmp;
 }
 
-static bool optiga_nettran_get_present(u8_t *frame_start)
+static bool optiga_nettran_get_present(uint8_t *frame_start)
 {
 	return frame_start[OPTIGA_NETTRAN_PCTR_OFFSET] & OPTIGA_NETTRAN_PCTR_PRESENT_FLAG;
 }
 
-int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
+int optiga_nettran_send_apdu(struct device *dev, const uint8_t *data, size_t len)
 {
 	__ASSERT(data, "Invalid NULL pointer");
 	size_t max_packet_size = 0;
-	u8_t *packet_buf = optiga_data_packet_buf(dev, &max_packet_size);
+	uint8_t *packet_buf = optiga_data_packet_buf(dev, &max_packet_size);
 
 	__ASSERT(max_packet_size > OPTIGA_NETTRAN_OVERHEAD, "Packet size to small");
 	size_t max_apdu_size =  max_packet_size - OPTIGA_NETTRAN_OVERHEAD;
@@ -103,7 +103,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 		return res;
 	}
 
-	const u8_t *cur_data = data;
+	const uint8_t *cur_data = data;
 	size_t remaining_len = len;
 
 	/* First packet */
@@ -155,7 +155,7 @@ int optiga_nettran_send_apdu(struct device *dev, const u8_t *data, size_t len)
 	return res;
 }
 
-int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
+int optiga_nettran_recv_apdu(struct device *dev, uint8_t *data, size_t *len)
 {
 	__ASSERT(data, "Invalid NULL pointer");
 	__ASSERT(len, "Invalid NULL pointer");
@@ -172,14 +172,14 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 	__ASSERT(buf_len >= OPTIGA_NETTRAN_PACKET_OFFSET, "Packet too small");
 
 	size_t max_packet_size = 0;
-	u8_t *buf = optiga_data_packet_buf(dev, &max_packet_size);
+	uint8_t *buf = optiga_data_packet_buf(dev, &max_packet_size);
 	struct optiga_data *driver = dev->driver_data;
 
 	/* Verify presence layer status on first packet */
 	__ASSERT(optiga_nettran_get_present(buf) == driver->nettran.presence_flag,
 		 "PRESENTATION layers status mismatch");
 
-	u8_t chain = optiga_nettran_get_chain(buf);
+	uint8_t chain = optiga_nettran_get_chain(buf);
 
 	if (chain == OPTIGA_NETTRAN_PCTR_CHAIN_NONE) {
 		/* No chaining */
@@ -205,7 +205,7 @@ int optiga_nettran_recv_apdu(struct device *dev, u8_t *data, size_t *len)
 		memcpy(data, buf + OPTIGA_NETTRAN_PACKET_OFFSET, buf_len);
 
 		size_t cur_len = buf_len;
-		u8_t *cur_data = data + cur_len;
+		uint8_t *cur_data = data + cur_len;
 		buf_len = 0;
 
 		res = optiga_data_recv_packet(dev, &buf_len);

@@ -12,7 +12,7 @@
 
 static struct device *dev = NULL;
 
-static const u8_t get_data_object_apdu[] = {
+static const uint8_t get_data_object_apdu[] = {
 	0x81,           /* command code */
 	0x00,           /* param, read data */
 	0x00, 0x02,     /* Length */
@@ -28,9 +28,9 @@ static void test_find_chip(void)
 static void test_get_chip_id(void)
 {
 #define TMP_BUF_SIZE 1024
-	u8_t tmp_buf[TMP_BUF_SIZE] = { 0 };
+	uint8_t tmp_buf[TMP_BUF_SIZE] = { 0 };
 	/* Non-unique data from Coprocessor UID, see "Table 38 - Coprocessor UID OPTIGA™ Trust Family" for details */
-	static const u8_t expected_id[] = {
+	static const uint8_t expected_id[] = {
 		0xCD,                                   /* CIM Identifier */
 		0x16,                                   /* Platform Identifier */
 		0x33,                                   /* Model Identifier */
@@ -60,9 +60,9 @@ static void test_get_chip_id(void)
 	zassert_equal(res, OPTIGA_STATUS_CODE_SUCCESS, "Event returned error code");
 	zassert_equal(get_do_txrx.rx_buf[0], 0x00, "APDU error status code");
 	zassert_equal(get_do_txrx.rx_len, 31, "returned data has unexpected length");
-	const u16_t len = sys_get_be16(&get_do_txrx.rx_buf[2]);
+	const uint16_t len = sys_get_be16(&get_do_txrx.rx_buf[2]);
 	zassert_equal(len, 27, "APDU encodes wrong length");
-	const u8_t *apdu_data = get_do_txrx.rx_buf + 4;
+	const uint8_t *apdu_data = get_do_txrx.rx_buf + 4;
 
 	/* Can only compare the non-unique part here */
 	zassert_mem_equal(apdu_data, expected_id, sizeof(expected_id), "Unexpected chip");
@@ -73,9 +73,9 @@ static void test_get_chip_id(void)
 static void test_invalid_apdu(void)
 {
 #define TMP_BUF_SIZE 100
-	u8_t tmp_buf[TMP_BUF_SIZE] = { 0 };
+	uint8_t tmp_buf[TMP_BUF_SIZE] = { 0 };
 	/* Invalid Command, minimum APDU length is 4 */
-	static const u8_t invalid_apdu[] = { 0x00, 0x00, 0x00, 0x00 };
+	static const uint8_t invalid_apdu[] = { 0x00, 0x00, 0x00, 0x00 };
 
 	struct optiga_apdu get_do_txrx = {
 		.tx_buf = invalid_apdu,

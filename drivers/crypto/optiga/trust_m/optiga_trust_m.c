@@ -82,7 +82,7 @@ enum OPTIGA_TRUSTM_SET_DATA_OBJECT {
  * @return Number of bytes written
  * @note This function does not check for buffer overflow or overflow in Length field
  */
-static size_t set_tlv(u8_t *buf, u8_t tag, const u8_t *val, u16_t val_len)
+static size_t set_tlv(uint8_t *buf, uint8_t tag, const uint8_t *val, uint16_t val_len)
 {
 	buf[TLV_TAG_OFFS] = tag;
 	sys_put_be16(val_len, &buf[TLV_LEN_OFFS]);
@@ -91,7 +91,7 @@ static size_t set_tlv(u8_t *buf, u8_t tag, const u8_t *val, u16_t val_len)
 }
 
 #define SET_TLV_U8_LEN 4
-static size_t set_tlv_u8(u8_t *buf, u8_t tag, u8_t val)
+static size_t set_tlv_u8(uint8_t *buf, uint8_t tag, uint8_t val)
 {
 	buf[TLV_TAG_OFFS] = tag;
 	sys_put_be16(1, &buf[TLV_LEN_OFFS]);
@@ -100,7 +100,7 @@ static size_t set_tlv_u8(u8_t *buf, u8_t tag, u8_t val)
 }
 
 #define SET_TLV_U16_LEN 5
-static size_t set_tlv_u16(u8_t *buf, u8_t tag, u16_t val)
+static size_t set_tlv_u16(uint8_t *buf, uint8_t tag, uint16_t val)
 {
 	buf[TLV_TAG_OFFS] = tag;
 	sys_put_be16(2, &buf[TLV_LEN_OFFS]);
@@ -108,7 +108,7 @@ static size_t set_tlv_u16(u8_t *buf, u8_t tag, u16_t val)
 	return SET_TLV_U16_LEN;
 }
 
-static size_t get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t **value)
+static size_t get_tlv(uint8_t *buf, size_t buf_len, uint8_t *tag, uint16_t *len, uint8_t **value)
 {
 	__ASSERT(buf != NULL, "NULL pointer not allowed");
 
@@ -116,14 +116,14 @@ static size_t get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t **v
 		return 0;
 	}
 
-	u8_t *tlv_start = buf;
+	uint8_t *tlv_start = buf;
 
 	if (tag) {
 		*tag = *tlv_start;
 	}
 	tlv_start += TLV_TAG_LEN;
 
-	u16_t tlv_len = sys_get_be16(tlv_start);
+	uint16_t tlv_len = sys_get_be16(tlv_start);
 
 	if (tlv_len > (buf_len - TLV_OVERHEAD)) {
 		/* Value field longer than buffer */
@@ -165,7 +165,7 @@ static size_t get_tlv(u8_t *buf, size_t buf_len, u8_t *tag, u16_t *len, u8_t **v
  * @note This function can only encode complete bytes and not single bits.
  *       It can also only encode a maximum of 125 bytes.
  */
-static size_t set_pub_key_as_bitstring(u8_t *buf, size_t buf_len, const u8_t *pub_key, size_t pub_key_len)
+static size_t set_pub_key_as_bitstring(uint8_t *buf, size_t buf_len, const uint8_t *pub_key, size_t pub_key_len)
 {
 	/* Overhead: Unused bits field + Compressed point marker */
 	if (pub_key_len > (DER_LENGTH_SINGLE_MAX - 2)) {
@@ -198,7 +198,7 @@ static size_t set_pub_key_as_bitstring(u8_t *buf, size_t buf_len, const u8_t *pu
 	return pub_key_len + DER_BITSTRING_PK_OVERHEAD;
 }
 
-static size_t cmds_set_apdu_header(u8_t *apdu_start, enum OPTIGA_TRUSTM_CMD cmd, u8_t param, u16_t in_len)
+static size_t cmds_set_apdu_header(uint8_t *apdu_start, enum OPTIGA_TRUSTM_CMD cmd, uint8_t param, uint16_t in_len)
 {
 	apdu_start[OPTIGA_TRUSTM_CMD_OFFSET] = cmd;
 	apdu_start[OPTIGA_TRUSTM_PARAM_OFFSET] = param;
@@ -206,7 +206,7 @@ static size_t cmds_set_apdu_header(u8_t *apdu_start, enum OPTIGA_TRUSTM_CMD cmd,
 	return OPTIGA_TRUSTM_IN_DATA_OFFSET;
 }
 
-static size_t cmds_get_apdu_header(const u8_t *apdu_start, u8_t *sta, u16_t *out_len)
+static size_t cmds_get_apdu_header(const uint8_t *apdu_start, uint8_t *sta, uint16_t *out_len)
 {
 	if (sta) {
 		*sta = apdu_start[OPTIGA_TRUSTM_STA_OFFSET];
@@ -220,7 +220,7 @@ static size_t cmds_get_apdu_header(const u8_t *apdu_start, u8_t *sta, u16_t *out
 }
 
 
-int optrust_init(struct optrust_ctx *ctx, struct device *dev, u8_t *apdu_buf, size_t apdu_buf_len)
+int optrust_init(struct optrust_ctx *ctx, struct device *dev, uint8_t *apdu_buf, size_t apdu_buf_len)
 {
 	__ASSERT(ctx != NULL && dev != NULL && apdu_buf != NULL, "No NULL parameters allowed");
 
@@ -235,9 +235,9 @@ void optrust_deinit(struct optrust_ctx *ctx)
 {
 }
 
-static int cmds_submit_apdu(struct optrust_ctx *ctx, const u8_t *apdu_end, enum OPTIGA_TRUSTM_CMD cmd, u8_t param)
+static int cmds_submit_apdu(struct optrust_ctx *ctx, const uint8_t *apdu_end, enum OPTIGA_TRUSTM_CMD cmd, uint8_t param)
 {
-	const u8_t *apdu_start = ctx->apdu_buf;
+	const uint8_t *apdu_start = ctx->apdu_buf;
 
 	__ASSERT((apdu_start + OPTIGA_TRUSTM_IN_DATA_OFFSET)  <= apdu_end, "Invalid apdu_end pointer");
 
@@ -248,7 +248,7 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx, const u8_t *apdu_end, enum 
 		return -EINVAL;
 	}
 
-	cmds_set_apdu_header(ctx->apdu_buf, cmd, param, (u16_t) in_data_len);
+	cmds_set_apdu_header(ctx->apdu_buf, cmd, param, (uint16_t) in_data_len);
 
 	/*
 	 * Setup APDU for cmd queue, reuse the apdu_buf for receiving,
@@ -277,7 +277,7 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx, const u8_t *apdu_end, enum 
  * @param out_len Contains the number of bytes in the outData field of the APDU afterwards
  * @return Pointer to outData field of the APDU on success, NULL otherwise
  */
-static u8_t *cmds_check_apdu(struct optrust_ctx *ctx, u16_t *out_len)
+static uint8_t *cmds_check_apdu(struct optrust_ctx *ctx, uint16_t *out_len)
 {
 	__ASSERT(ctx != NULL && out_len != NULL, "No NULL parameters allowed");
 
@@ -287,9 +287,9 @@ static u8_t *cmds_check_apdu(struct optrust_ctx *ctx, u16_t *out_len)
 		return NULL;
 	}
 
-	u8_t *rx_buf = ctx->apdu.rx_buf;
+	uint8_t *rx_buf = ctx->apdu.rx_buf;
 
-	u8_t sta = 0;
+	uint8_t sta = 0;
 
 	rx_buf += cmds_get_apdu_header(rx_buf, &sta, out_len);
 
@@ -367,14 +367,14 @@ void optrust_wake_lock_release(struct optrust_ctx *ctx, int token)
 #define OPTIGA_TRUSTM_SESSIONS 4
 
 /* See Figure 29 - Overview Data and Key Store */
-static const u16_t optiga_trustm_sessions[OPTIGA_TRUSTM_SESSIONS] = {
+static const uint16_t optiga_trustm_sessions[OPTIGA_TRUSTM_SESSIONS] = {
 	0xE100,
 	0xE101,
 	0xE102,
 	0xE103,
 };
 
-int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid)
+int optrust_session_acquire(struct optrust_ctx *ctx, uint16_t *oid)
 {
 	int session = 0;
 
@@ -395,7 +395,7 @@ int optrust_session_acquire(struct optrust_ctx *ctx, u16_t *oid)
 	return 0;
 }
 
-int optrust_session_release(struct optrust_ctx *ctx, u16_t oid)
+int optrust_session_release(struct optrust_ctx *ctx, uint16_t oid)
 {
 	int session = 0;
 
@@ -410,7 +410,7 @@ int optrust_session_release(struct optrust_ctx *ctx, u16_t oid)
 	return -EINVAL;
 }
 
-int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *psk, size_t psk_len)
+int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const uint8_t *psk, size_t psk_len)
 {
 	__ASSERT(ctx != NULL && psk != NULL, "No NULL parameters allowed");
 
@@ -422,14 +422,14 @@ int optrust_shielded_connection_psk_start(struct optrust_ctx *ctx, const u8_t *p
 	}
 
 	/* Submit a dummy APDU to trigger an immediate handshake */
-	u8_t dummy = 0;
+	uint8_t dummy = 0;
 	size_t dummy_len = 1;
 
 	/* If that APDU fails, it's because shielded connection was not enabled properly */
 	return optrust_data_get(ctx, 0xE0C2, 0, &dummy, &dummy_len);
 }
 
-int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf, size_t *len)
+int optrust_data_get(struct optrust_ctx *ctx, uint16_t oid, size_t offs, uint8_t *buf, size_t *len)
 {
 	__ASSERT(ctx != NULL && buf != NULL && len != NULL, "No NULL parameters allowed");
 
@@ -446,7 +446,7 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -476,8 +476,8 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	const uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -494,7 +494,7 @@ int optrust_data_get(struct optrust_ctx *ctx, u16_t oid, size_t offs, u8_t *buf,
 	return 0;
 }
 
-int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *len)
+int optrust_metadata_get(struct optrust_ctx *ctx, uint16_t oid, uint8_t *buf, size_t *len)
 {
 	__ASSERT(ctx != NULL && buf != NULL && len != NULL, "No NULL parameters allowed");
 
@@ -506,7 +506,7 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -530,7 +530,7 @@ int optrust_metadata_get(struct optrust_ctx *ctx, u16_t oid, u8_t *buf, size_t *
 	return cmds_check_apdu_empty(ctx);
 }
 
-static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_DATA_OBJECT param, u16_t oid, size_t offs, const u8_t *data, size_t len)
+static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_DATA_OBJECT param, uint16_t oid, size_t offs, const uint8_t *data, size_t len)
 {
 	__ASSERT(ctx != NULL && data != NULL, "No NULL parameters allowed");
 
@@ -548,7 +548,7 @@ static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	sys_put_be16(oid, tx_buf);
@@ -565,7 +565,7 @@ static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
 					   OPTIGA_TRUSTM_CMD_SET_DATA_OBJECT,
-					   (u8_t) param /* Param */);
+					   (uint8_t) param /* Param */);
 
 	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
@@ -580,28 +580,28 @@ static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_data_set(struct optrust_ctx *ctx, u16_t oid, bool erase, size_t offs, const u8_t *buf, size_t len)
+int optrust_data_set(struct optrust_ctx *ctx, uint16_t oid, bool erase, size_t offs, const uint8_t *buf, size_t len)
 {
-	const u8_t param = erase ? OPTIGA_TRUSTM_SET_DATA_OBJECT_ERASE_WRITE_DATA
+	const uint8_t param = erase ? OPTIGA_TRUSTM_SET_DATA_OBJECT_ERASE_WRITE_DATA
 		: OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_DATA;
 
 	return optrust_int_data_set(ctx, param, oid, offs, buf, len);
 }
 
-int optrust_metadata_set(struct optrust_ctx *ctx, u16_t oid, const u8_t *data, size_t data_len)
+int optrust_metadata_set(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *data, size_t data_len)
 {
 	return optrust_int_data_set(ctx, OPTIGA_TRUSTM_SET_DATA_OBJECT_WRITE_METADATA, oid, 0, data, data_len);
 }
 
-int optrust_counter_inc(struct optrust_ctx *ctx, u16_t oid, u8_t inc)
+int optrust_counter_inc(struct optrust_ctx *ctx, uint16_t oid, uint8_t inc)
 {
 	return optrust_int_data_set(ctx, OPTIGA_TRUSTM_SET_DATA_OBJECT_COUNT, oid, 0, &inc, 1);
 }
 
 /* See 4.4.1.5 SetObjectProtected footnotes for the source */
 #define OPTIGA_DATA_PROTECTED_UPDATE_BLOCK_LEN 640
-int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest, size_t manifest_len,
-				  const u8_t *payload, size_t payload_len)
+int optrust_data_protected_update(struct optrust_ctx *ctx, const uint8_t *manifest, size_t manifest_len,
+				  const uint8_t *payload, size_t payload_len)
 {
 	// TODO(chr): check if this function needs to be atomic or if other APDUs can be mixed in
 	__ASSERT(ctx != NULL && manifest != NULL && payload != NULL, "No NULL parameters allowed");
@@ -620,7 +620,7 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Manifest */
 	tx_buf += set_tlv(tx_buf, 0x30, manifest, manifest_len);
@@ -645,7 +645,7 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
 		return res_code;
 	}
 
-	const u8_t *cur_payload = payload;
+	const uint8_t *cur_payload = payload;
 	size_t remaining_len = payload_len;
 
 	/* Send 'continue' APDU */
@@ -719,7 +719,7 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const u8_t *manifest,
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len)
+int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *digest, size_t digest_len, uint8_t *signature, size_t *signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 
@@ -737,10 +737,10 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest to be signed */
-	tx_buf += set_tlv(tx_buf, 0x01, digest, (u16_t) digest_len);
+	tx_buf += set_tlv(tx_buf, 0x01, digest, (uint16_t) digest_len);
 
 	/* OID of signature key */
 	tx_buf += set_tlv_u16(tx_buf, 0x03, oid);
@@ -761,8 +761,8 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	const uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -803,9 +803,9 @@ int optrust_ecdsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *diges
 }
 
 int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg,
-			     const u8_t *pub_key, size_t pub_key_len,
-			     const u8_t *digest, size_t digest_len,
-			     const u8_t *signature, size_t signature_len)
+			     const uint8_t *pub_key, size_t pub_key_len,
+			     const uint8_t *digest, size_t digest_len,
+			     const uint8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 
@@ -838,17 +838,17 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest */
-	tx_buf += set_tlv(tx_buf, 0x01, digest, (u16_t) digest_len);
+	tx_buf += set_tlv(tx_buf, 0x01, digest, (uint16_t) digest_len);
 
 	/* Second parameter */
 	*tx_buf = 0x02;
 	tx_buf++;
 
 	/* we don't know the length of the signature data and public key yet, remember the position */
-	u8_t *const sig_len_field = tx_buf;
+	uint8_t *const sig_len_field = tx_buf;
 
 	tx_buf += 2;
 
@@ -884,14 +884,14 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 
 	/* Algorithm identifier of public key */
 	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public key Tag */
 	*tx_buf = 0x06;
 	tx_buf++;
 
 	/* Public key Length, not known yet */
-	u8_t *pub_key_len_field = tx_buf;
+	uint8_t *pub_key_len_field = tx_buf;
 
 	tx_buf += 2;
 
@@ -927,7 +927,7 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
+int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *digest, size_t digest_len, const uint8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 	static const size_t cmd_overhead = OPTIGA_TRUSTM_IN_DATA_OFFSET + TLV_OVERHEAD + TLV_OVERHEAD + SET_TLV_U16_LEN;
@@ -944,17 +944,17 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest */
-	tx_buf += set_tlv(tx_buf, 0x01, digest, (u16_t) digest_len);
+	tx_buf += set_tlv(tx_buf, 0x01, digest, (uint16_t) digest_len);
 
 	/* Second parameter */
 	*tx_buf = 0x02;
 	tx_buf++;
 
 	/* we don't know the length of the signature data yet, remember the position */
-	u8_t *const sig_len_field = tx_buf;
+	uint8_t *const sig_len_field = tx_buf;
 
 	tx_buf += 2;
 
@@ -1000,8 +1000,8 @@ int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, const u8_t *dig
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
-			     enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t **out_data, size_t *out_data_len)
+int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_ALGORITHM alg,
+			     enum OPTRUST_KEY_USAGE_FLAG key_usage, uint8_t **out_data, size_t *out_data_len)
 {
 	__ASSERT(ctx != NULL && out_data != NULL && out_data_len != NULL, "No NULL parameters allowed");
 
@@ -1024,14 +1024,14 @@ int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, oid);
 
 	/* Key usage identifier */
 	__ASSERT(key_usage >= 0 && key_usage <= U8_MAX, "Invalid key usage identifer");
-	tx_buf += set_tlv_u8(tx_buf, 0x02, (u8_t) key_usage);
+	tx_buf += set_tlv_u8(tx_buf, 0x02, (uint8_t) key_usage);
 
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
@@ -1049,8 +1049,8 @@ int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *res_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *res_data = cmds_check_apdu(ctx, &out_len);
 
 	if (res_data == NULL) {
 		/* Invalid APDU */
@@ -1063,8 +1063,8 @@ int optrust_int_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 	return 0;
 }
 
-int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
-			     enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_ALGORITHM alg,
+			     enum OPTRUST_KEY_USAGE_FLAG key_usage, uint8_t *pub_key, size_t *pub_key_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL, "No NULL parameters allowed");
 
@@ -1085,7 +1085,7 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 		return -EINVAL;
 	}
 
-	u8_t *out_data = NULL;
+	uint8_t *out_data = NULL;
 	size_t out_data_len = 0;
 
 	int res = optrust_int_gen_keys_oid(ctx, oid, alg, key_usage, &out_data, &out_data_len);
@@ -1108,8 +1108,8 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 
 static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
 				    enum OPTRUST_ALGORITHM alg,
-				    u8_t **sec_key, size_t *sec_key_len,
-				    u8_t **pub_key, size_t *pub_key_len)
+				    uint8_t **sec_key, size_t *sec_key_len,
+				    uint8_t **pub_key, size_t *pub_key_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
 		 && sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
@@ -1133,7 +1133,7 @@ static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Export key pair in plain */
 	tx_buf += set_tlv(tx_buf, 0x07, NULL, 0);
@@ -1154,16 +1154,16 @@ static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
 		return -EIO;
 	}
 
-	u8_t tag = 0;
-	u16_t len = 0;
+	uint8_t tag = 0;
+	uint16_t len = 0;
 
 	/* Parse secret key */
 	size_t res = get_tlv(out_data, out_len, &tag, &len, sec_key);
@@ -1200,8 +1200,8 @@ static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
 
 int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 			     enum OPTRUST_ALGORITHM alg,
-			     u8_t *sec_key, size_t *sec_key_len,
-			     u8_t *pub_key, size_t *pub_key_len)
+			     uint8_t *sec_key, size_t *sec_key_len,
+			     uint8_t *pub_key, size_t *pub_key_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
 		 && sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
@@ -1229,10 +1229,10 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EINVAL;
 	}
 
-	u8_t *sec_key_asn1 = NULL;
+	uint8_t *sec_key_asn1 = NULL;
 	size_t sec_key_asn1_len = 0;
 
-	u8_t *pub_key_asn1 = NULL;
+	uint8_t *pub_key_asn1 = NULL;
 	size_t pub_key_asn1_len = 0;
 
 	int res = optrust_int_gen_keys_ext(ctx, alg, &sec_key_asn1, &sec_key_asn1_len,
@@ -1292,8 +1292,8 @@ enum OPTIGA_TRUSTM_CALC_HASH_TAGS {
 	OPTIGA_TRUSTM_CALC_HASH_OID_FINAL_KEEP  = 0x15,
 };
 
-int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t *data, size_t data_len,
-		       u8_t *digest, size_t *digest_len)
+int optrust_sha256_ext(struct optrust_ctx *ctx, const uint8_t *data, size_t data_len,
+		       uint8_t *digest, size_t *digest_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && digest_len != NULL && data != NULL, "No NULL parameters allowed");
 
@@ -1316,10 +1316,10 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t *data, size_t data_le
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Write message data */
-	tx_buf += set_tlv(tx_buf, OPTIGA_TRUSTM_CALC_HASH_START_FINAL, data, (u16_t) data_len);
+	tx_buf += set_tlv(tx_buf, OPTIGA_TRUSTM_CALC_HASH_START_FINAL, data, (uint16_t) data_len);
 
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
@@ -1337,8 +1337,8 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t *data, size_t data_le
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -1347,9 +1347,9 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t *data, size_t data_le
 
 	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + TLV_OVERHEAD), "Unexpected data returned");
 
-	u8_t tag = 0;
-	u16_t len = 0;
-	u8_t *out_digest = NULL;
+	uint8_t tag = 0;
+	uint16_t len = 0;
+	uint8_t *out_digest = NULL;
 
 	if (get_tlv(out_data, out_len, &tag, &len, &out_digest) == 0) {
 		/* Failed to parse result */
@@ -1367,8 +1367,8 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const u8_t *data, size_t data_le
 }
 
 int optrust_sha256_oid(struct optrust_ctx *ctx,
-		       u16_t oid, size_t offs, size_t len,
-		       u8_t *digest, size_t *digest_len)
+		       uint16_t oid, size_t offs, size_t len,
+		       uint8_t *digest, size_t *digest_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && digest_len != NULL, "No NULL parameters allowed");
 
@@ -1390,7 +1390,7 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Tag */
 	*tx_buf = OPTIGA_TRUSTM_CALC_HASH_OID_START_FINAL;
@@ -1428,8 +1428,8 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -1438,9 +1438,9 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 
 	__ASSERT(out_len == (OPTRUST_SHA256_DIGEST_LEN + 3), "Unexpected data returned");
 
-	u8_t tag = 0;
-	u16_t out_digest_len = 0;
-	u8_t *out_digest = NULL;
+	uint8_t tag = 0;
+	uint16_t out_digest_len = 0;
+	uint8_t *out_digest = NULL;
 
 	if (get_tlv(out_data, out_len, &tag, &out_digest_len, &out_digest) == 0) {
 		/* Failed to parse result */
@@ -1457,10 +1457,10 @@ int optrust_sha256_oid(struct optrust_ctx *ctx,
 	return 0;
 }
 
-int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
+int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 			  enum OPTRUST_ALGORITHM alg,
-			  const u8_t *pub_key, size_t pub_key_len,
-			  u8_t *shared_secret, size_t *shared_secret_len)
+			  const uint8_t *pub_key, size_t pub_key_len,
+			  uint8_t *shared_secret, size_t *shared_secret_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL, "No NULL parameters allowed");
 	static const size_t cmd_overhead = OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U16_LEN + SET_TLV_U8_LEN + TLV_OVERHEAD + TLV_OVERHEAD;
@@ -1486,21 +1486,21 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Private Key */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
 
 	/* Algorithm Identifier */
 	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public key Tag */
 	*tx_buf = 0x06;
 	tx_buf++;
 
 	/* Public key Length, not known yet */
-	u8_t *pub_key_len_field = tx_buf;
+	uint8_t *pub_key_len_field = tx_buf;
 
 	tx_buf += 2;
 
@@ -1538,8 +1538,8 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	const uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -1556,10 +1556,10 @@ int optrust_ecdh_calc_ext(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	return 0;
 }
 
-int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
+int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 			  enum OPTRUST_ALGORITHM alg,
-			  const u8_t *pub_key, size_t pub_key_len,
-			  u16_t shared_secret_oid)
+			  const uint8_t *pub_key, size_t pub_key_len,
+			  uint16_t shared_secret_oid)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL, "No NULL parameters allowed");
 
@@ -1586,21 +1586,21 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Private Key */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_key_oid);
 
 	/* Algorithm Identifier */
 	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public key Tag */
 	*tx_buf = 0x06;
 	tx_buf++;
 
 	/* Public key Length, not known yet */
-	u8_t *pub_key_len_field = tx_buf;
+	uint8_t *pub_key_len_field = tx_buf;
 
 	tx_buf += 2;
 
@@ -1638,7 +1638,7 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, u16_t sec_key_oid,
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_t *rnd, size_t rnd_len)
+int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, uint8_t *rnd, size_t rnd_len)
 {
 	__ASSERT(ctx != NULL && rnd != NULL, "No NULL parameters allowed");
 	__ASSERT(rnd_len > 0, "Can't generate 0 random bytes");
@@ -1656,9 +1656,9 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
-	u16_t request_len = rnd_len < 8 ? 8 : (u16_t) rnd_len;
+	uint16_t request_len = rnd_len < 8 ? 8 : (uint16_t) rnd_len;
 
 	/* Length of random stream */
 	sys_put_be16(request_len, tx_buf);
@@ -1667,7 +1667,7 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
 					   OPTIGA_TRUSTM_CMD_GET_RANDOM,
-					   (u8_t) type /* Param */);
+					   (uint8_t) type /* Param */);
 
 	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
@@ -1680,8 +1680,8 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -1697,7 +1697,7 @@ int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, u8_
 	return 0;
 }
 
-int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, const u8_t *prepend, size_t prepend_len)
+int optrust_rng_gen_oid(struct optrust_ctx *ctx, uint16_t oid, size_t rnd_len, const uint8_t *prepend, size_t prepend_len)
 {
 	__ASSERT(ctx != NULL, "No NULL parameters allowed");
 	__ASSERT(rnd_len > 0, "Can't generate 0 random bytes");
@@ -1725,10 +1725,10 @@ int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, cons
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Length of random stream */
-	sys_put_be16((u16_t) rnd_len, tx_buf);
+	sys_put_be16((uint16_t) rnd_len, tx_buf);
 	tx_buf += 2;
 
 	/* Optional data to prepend */
@@ -1751,8 +1751,8 @@ int optrust_rng_gen_oid(struct optrust_ctx *ctx, u16_t oid, size_t rnd_len, cons
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
-			 const u8_t *digest, size_t digest_len, u8_t *signature, size_t *signature_len)
+int optrust_rsa_sign_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
+			 const uint8_t *digest, size_t digest_len, uint8_t *signature, size_t *signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 
@@ -1770,10 +1770,10 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest to be signed */
-	tx_buf += set_tlv(tx_buf, 0x01, digest, (u16_t) digest_len);
+	tx_buf += set_tlv(tx_buf, 0x01, digest, (uint16_t) digest_len);
 
 	/* OID of signature key */
 	tx_buf += set_tlv_u16(tx_buf, 0x03, oid);
@@ -1781,7 +1781,7 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
 					   OPTIGA_TRUSTM_CMD_CALC_SIGN,
-					   (u8_t) scheme);
+					   (uint8_t) scheme);
 
 	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
@@ -1794,8 +1794,8 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	const uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -1819,8 +1819,8 @@ int optrust_rsa_sign_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNAT
 	return 0;
 }
 
-int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_ALGORITHM alg,
-			     enum OPTRUST_KEY_USAGE_FLAG key_usage, u8_t *pub_key, size_t *pub_key_len)
+int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_ALGORITHM alg,
+			     enum OPTRUST_KEY_USAGE_FLAG key_usage, uint8_t *pub_key, size_t *pub_key_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL, "No NULL parameters allowed");
 
@@ -1832,7 +1832,7 @@ int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 		return -EINVAL;
 	}
 
-	u8_t *out_data = NULL;
+	uint8_t *out_data = NULL;
 	size_t out_data_len = 0;
 
 	int res = optrust_int_gen_keys_oid(ctx, oid, alg, key_usage, &out_data, &out_data_len);
@@ -1841,9 +1841,9 @@ int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 		return res;
 	}
 
-	u8_t tag = 0;
-	u16_t len = 0;
-	u8_t *value = NULL;
+	uint8_t tag = 0;
+	uint16_t len = 0;
+	uint8_t *value = NULL;
 
 	if (get_tlv(out_data, out_data_len, &tag, &len, &value) == 0) {
 		/* Failed to parse output data */
@@ -1865,8 +1865,8 @@ int optrust_rsa_gen_keys_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_AL
 
 int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx,
 			     enum OPTRUST_ALGORITHM alg,
-			     u8_t *sec_key, size_t *sec_key_len,
-			     u8_t *pub_key, size_t *pub_key_len)
+			     uint8_t *sec_key, size_t *sec_key_len,
+			     uint8_t *pub_key, size_t *pub_key_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && pub_key_len != NULL
 		 && sec_key != NULL && sec_key_len != NULL, "No NULL parameters allowed");
@@ -1880,10 +1880,10 @@ int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx,
 		return -EINVAL;
 	}
 
-	u8_t *i_sec_key = NULL;
+	uint8_t *i_sec_key = NULL;
 	size_t i_sec_key_len = 0;
 
-	u8_t *i_pub_key = NULL;
+	uint8_t *i_pub_key = NULL;
 	size_t i_pub_key_len = 0;
 
 	int res =  optrust_int_gen_keys_ext(ctx, alg, &i_sec_key, &i_sec_key_len,
@@ -1909,9 +1909,9 @@ int optrust_rsa_gen_keys_ext(struct optrust_ctx *ctx,
 }
 
 int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEME scheme,
-			   enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-			   const u8_t *digest, size_t digest_len,
-			   const u8_t *signature, size_t signature_len)
+			   enum OPTRUST_ALGORITHM alg, const uint8_t *pub_key, size_t pub_key_len,
+			   const uint8_t *digest, size_t digest_len,
+			   const uint8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 	switch (alg) {
@@ -1947,25 +1947,25 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest */
-	tx_buf += set_tlv(tx_buf, 0x01, digest, (u16_t) digest_len);
+	tx_buf += set_tlv(tx_buf, 0x01, digest, (uint16_t) digest_len);
 
 	/* Signature */
-	tx_buf += set_tlv(tx_buf, 0x02, signature, (u16_t) signature_len);
+	tx_buf += set_tlv(tx_buf, 0x02, signature, (uint16_t) signature_len);
 
 	/* Algorithm Identifier of public key */
 	__ASSERT(alg >= 0 && alg <= U8_MAX, "Invalid algorithm identifer");
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public Key */
-	tx_buf += set_tlv(tx_buf, 0x06, pub_key, (u16_t) pub_key_len);
+	tx_buf += set_tlv(tx_buf, 0x06, pub_key, (uint16_t) pub_key_len);
 
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
 					   OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
-					   (u8_t) scheme);
+					   (uint8_t) scheme);
 
 	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
@@ -1980,8 +1980,8 @@ int optrust_rsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_SIGNATURE_SCHEM
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
-			   const u8_t *digest, size_t digest_len, const u8_t *signature, size_t signature_len)
+int optrust_rsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_SIGNATURE_SCHEME scheme,
+			   const uint8_t *digest, size_t digest_len, const uint8_t *signature, size_t signature_len)
 {
 	__ASSERT(ctx != NULL && digest != NULL && signature != NULL, "No NULL parameters allowed");
 
@@ -2004,13 +2004,13 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGN
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Digest */
-	tx_buf += set_tlv(tx_buf, 0x01, digest, (u16_t) digest_len);
+	tx_buf += set_tlv(tx_buf, 0x01, digest, (uint16_t) digest_len);
 
 	/* Signature */
-	tx_buf += set_tlv(tx_buf, 0x02, signature, (u16_t) signature_len);
+	tx_buf += set_tlv(tx_buf, 0x02, signature, (uint16_t) signature_len);
 
 	/* OID of Public Key Certificate */
 	tx_buf += set_tlv_u16(tx_buf, 0x04, oid);
@@ -2018,7 +2018,7 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGN
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
 					   OPTIGA_TRUSTM_CMD_VERIFY_SIGN,
-					   (u8_t) scheme);
+					   (uint8_t) scheme);
 
 	if (optiga_is_driver_error(result_code)) {
 		/* Our driver errored */
@@ -2033,8 +2033,8 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, u16_t oid, enum OPTRUST_SIGN
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
-				       size_t key_len, u16_t key_oid)
+int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
+				       size_t key_len, uint16_t key_oid)
 {
 	__ASSERT(ctx != NULL && deriv_data != NULL, "No NULL parameters allowed");
 	static const size_t cmd_overhead = OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U8_LEN + TLV_OVERHEAD + SET_TLV_U16_LEN + SET_TLV_U16_LEN;
@@ -2056,16 +2056,16 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Shared Secret */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_oid);
 
 	/* Secret derivation data */
-	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, (u16_t) deriv_data_len);
+	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, (uint16_t) deriv_data_len);
 
 	/* Length of derived key */
-	tx_buf += set_tlv_u16(tx_buf, 0x03, (u16_t) key_len);
+	tx_buf += set_tlv_u16(tx_buf, 0x03, (uint16_t) key_len);
 
 	/* OID to store the derived key */
 	tx_buf += set_tlv_u16(tx_buf, 0x08, key_oid);
@@ -2089,8 +2089,8 @@ int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, u16_t sec_oid, c
 	return cmds_check_apdu_empty(ctx);
 }
 
-int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, const u8_t *deriv_data, size_t deriv_data_len,
-				       u8_t *key, size_t key_len)
+int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
+				       uint8_t *key, size_t key_len)
 {
 	__ASSERT(ctx != NULL && deriv_data != NULL, "No NULL parameters allowed");
 	static const size_t cmd_overhead = OPTIGA_TRUSTM_IN_DATA_OFFSET + SET_TLV_U8_LEN + TLV_OVERHEAD + SET_TLV_U16_LEN + TLV_OVERHEAD;
@@ -2112,16 +2112,16 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID of Shared Secret */
 	tx_buf += set_tlv_u16(tx_buf, 0x01, sec_oid);
 
 	/* Secret derivation data */
-	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, (u16_t) deriv_data_len);
+	tx_buf += set_tlv(tx_buf, 0x02, deriv_data, (uint16_t) deriv_data_len);
 
 	/* Length of derived key */
-	tx_buf += set_tlv_u16(tx_buf, 0x03, (u16_t) key_len);
+	tx_buf += set_tlv_u16(tx_buf, 0x03, (uint16_t) key_len);
 
 	/* Export derived key */
 	tx_buf += set_tlv(tx_buf, 0x07, NULL, 0);
@@ -2142,8 +2142,8 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	const u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	const uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
@@ -2169,7 +2169,7 @@ int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, u16_t sec_oid, c
  * @param enc_msg_len Length of enc_msg, contains written bytes afterwards
  * @return 0 on success, error code otherwise
  */
-int optrust_int_rsa_encrypt_submit(struct optrust_ctx *ctx, u8_t *tx_buf, u8_t *enc_msg, size_t *enc_msg_len)
+int optrust_int_rsa_encrypt_submit(struct optrust_ctx *ctx, uint8_t *tx_buf, uint8_t *enc_msg, size_t *enc_msg_len)
 {
 	int result_code = cmds_submit_apdu(ctx,
 					   tx_buf,
@@ -2187,17 +2187,17 @@ int optrust_int_rsa_encrypt_submit(struct optrust_ctx *ctx, u8_t *tx_buf, u8_t *
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
 		return -EIO;
 	}
 
-	u8_t tag = 0;
-	u16_t len = 0;
-	u8_t *value = NULL;
+	uint8_t tag = 0;
+	uint16_t len = 0;
+	uint8_t *value = NULL;
 
 	if (get_tlv(out_data, out_len, &tag, &len, &value) == 0) {
 		/* Invalid data */
@@ -2220,9 +2220,9 @@ int optrust_int_rsa_encrypt_submit(struct optrust_ctx *ctx, u8_t *tx_buf, u8_t *
 	return 0;
 }
 
-int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-				u8_t *enc_msg, size_t *enc_msg_len)
+int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				enum OPTRUST_ALGORITHM alg, const uint8_t *pub_key, size_t pub_key_len,
+				uint8_t *enc_msg, size_t *enc_msg_len)
 {
 	__ASSERT(ctx != NULL && msg != NULL && pub_key != NULL && enc_msg != NULL, "No NULL parameters allowed");
 	switch (alg) {
@@ -2253,13 +2253,13 @@ int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Message */
 	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
 
 	/* Algorithm Identifier of public key*/
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public Key */
 	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
@@ -2267,9 +2267,9 @@ int optrust_rsa_encrypt_msg_ext(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
 }
 
-int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
-				enum OPTRUST_ALGORITHM alg, const u8_t *pub_key, size_t pub_key_len,
-				u8_t *enc_msg, size_t *enc_msg_len)
+int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, uint16_t oid,
+				enum OPTRUST_ALGORITHM alg, const uint8_t *pub_key, size_t pub_key_len,
+				uint8_t *enc_msg, size_t *enc_msg_len)
 {
 	__ASSERT(ctx != NULL && pub_key != NULL && enc_msg != NULL, "No NULL parameters allowed");
 	switch (alg) {
@@ -2295,13 +2295,13 @@ int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* OID */
 	tx_buf += set_tlv_u16(tx_buf, 0x02, oid);
 
 	/* Algorithm Identifier of public key*/
-	tx_buf += set_tlv_u8(tx_buf, 0x05, (u8_t) alg);
+	tx_buf += set_tlv_u8(tx_buf, 0x05, (uint8_t) alg);
 
 	/* Public Key */
 	tx_buf += set_tlv(tx_buf, 0x06, pub_key, pub_key_len);
@@ -2309,8 +2309,8 @@ int optrust_rsa_encrypt_oid_ext(struct optrust_ctx *ctx, u16_t oid,
 	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
 }
 
-int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				u16_t cert_oid, u8_t *enc_msg, size_t *enc_msg_len)
+int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				uint16_t cert_oid, uint8_t *enc_msg, size_t *enc_msg_len)
 {
 	__ASSERT(ctx != NULL && msg != NULL && enc_msg != NULL, "No NULL parameters allowed");
 
@@ -2328,7 +2328,7 @@ int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Message */
 	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
@@ -2339,8 +2339,8 @@ int optrust_rsa_encrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
 }
 
-int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
-				u16_t cert_oid, u8_t *enc_msg, size_t *enc_msg_len)
+int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, uint16_t msg_oid,
+				uint16_t cert_oid, uint8_t *enc_msg, size_t *enc_msg_len)
 {
 	__ASSERT(ctx != NULL && enc_msg != NULL, "No NULL parameters allowed");
 
@@ -2352,7 +2352,7 @@ int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Message OID */
 	tx_buf += set_tlv_u16(tx_buf, 0x02, msg_oid);
@@ -2363,8 +2363,8 @@ int optrust_rsa_encrypt_oid_oid(struct optrust_ctx *ctx, u16_t msg_oid,
 	return optrust_int_rsa_encrypt_submit(ctx, tx_buf, enc_msg, enc_msg_len);
 }
 
-int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				u16_t key_oid,  u8_t *dec_msg, size_t *dec_msg_len)
+int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				uint16_t key_oid,  uint8_t *dec_msg, size_t *dec_msg_len)
 {
 	__ASSERT(ctx != NULL && msg != NULL && dec_msg != NULL, "No NULL parameters allowed");
 
@@ -2382,7 +2382,7 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Protected Message */
 	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
@@ -2406,17 +2406,17 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 
 	/* Parse response */
 
-	u16_t out_len = 0;
-	u8_t *out_data = cmds_check_apdu(ctx, &out_len);
+	uint16_t out_len = 0;
+	uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
 
 	if (out_data == NULL) {
 		/* Invalid APDU */
 		return -EIO;
 	}
 
-	u8_t tag = 0;
-	u16_t len = 0;
-	u8_t *value = NULL;
+	uint8_t tag = 0;
+	uint16_t len = 0;
+	uint8_t *value = NULL;
 
 	if (get_tlv(out_data, out_len, &tag, &len, &value) == 0) {
 		/* Invalid data */
@@ -2439,8 +2439,8 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	return 0;
 }
 
-int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t msg_len,
-				u16_t key_oid,  u16_t dec_oid)
+int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
+				uint16_t key_oid,  uint16_t dec_oid)
 {
 	__ASSERT(ctx != NULL && msg != NULL, "No NULL parameters allowed");
 
@@ -2458,7 +2458,7 @@ int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const u8_t *msg, size_t
 	}
 
 	/* Skip to APDU inData field */
-	u8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
+	uint8_t *tx_buf = ctx->apdu_buf + OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
 	/* Protected Message */
 	tx_buf += set_tlv(tx_buf, 0x61, msg, msg_len);
