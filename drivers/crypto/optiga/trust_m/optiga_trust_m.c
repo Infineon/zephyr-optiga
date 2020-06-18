@@ -11,6 +11,7 @@
 #include <sys/byteorder.h>
 
 #include "ecdsa_utils.h"
+#include "tlv_utils.h"
 
 #define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
@@ -63,86 +64,6 @@ enum OPTIGA_TRUSTM_SET_DATA_OBJECT {
 #define OPTIGA_TRUSTM_STA_OFFSET 0
 #define OPTIGA_TRUSTM_OUT_LEN_OFFSET 2
 #define OPTIGA_TRUSTM_OUT_DATA_OFFSET 4
-
-#define TLV_TAG_LEN 1
-#define TLV_LEN_LEN 2
-
-#define TLV_TAG_OFFS 0
-#define TLV_LEN_OFFS (TLV_TAG_OFFS + TLV_TAG_LEN)
-#define TLV_VAL_OFFS (TLV_LEN_OFFS + TLV_LEN_LEN)
-
-#define TLV_OVERHEAD (TLV_TAG_LEN + TLV_LEN_LEN)
-
-/**
- * @brief Encodes bytes into a Tag Length Value structure
- * @param buf Target buffer for encoded data
- * @param tag Tag value
- * @param val Buffer for Value bytes
- * @param val_len Length of val
- * @return Number of bytes written
- * @note This function does not check for buffer overflow or overflow in Length field
- */
-static size_t set_tlv(uint8_t *buf, uint8_t tag, const uint8_t *val, uint16_t val_len)
-{
-	buf[TLV_TAG_OFFS] = tag;
-	sys_put_be16(val_len, &buf[TLV_LEN_OFFS]);
-	memcpy(&buf[TLV_VAL_OFFS], val, val_len);
-	return val_len + TLV_OVERHEAD;
-}
-
-#define SET_TLV_U8_LEN 4
-static size_t set_tlv_u8(uint8_t *buf, uint8_t tag, uint8_t val)
-{
-	buf[TLV_TAG_OFFS] = tag;
-	sys_put_be16(1, &buf[TLV_LEN_OFFS]);
-	buf[TLV_VAL_OFFS] = val;
-	return SET_TLV_U8_LEN;
-}
-
-#define SET_TLV_U16_LEN 5
-static size_t set_tlv_u16(uint8_t *buf, uint8_t tag, uint16_t val)
-{
-	buf[TLV_TAG_OFFS] = tag;
-	sys_put_be16(2, &buf[TLV_LEN_OFFS]);
-	sys_put_be16(val, &buf[TLV_VAL_OFFS]);
-	return SET_TLV_U16_LEN;
-}
-
-static size_t get_tlv(uint8_t *buf, size_t buf_len, uint8_t *tag, uint16_t *len, uint8_t **value)
-{
-	__ASSERT(buf != NULL, "NULL pointer not allowed");
-
-	if (buf_len < TLV_OVERHEAD) {
-		return 0;
-	}
-
-	uint8_t *tlv_start = buf;
-
-	if (tag) {
-		*tag = *tlv_start;
-	}
-	tlv_start += TLV_TAG_LEN;
-
-	uint16_t tlv_len = sys_get_be16(tlv_start);
-
-	if (tlv_len > (buf_len - TLV_OVERHEAD)) {
-		/* Value field longer than buffer */
-		return 0;
-	}
-
-	if (len) {
-		*len = tlv_len;
-	}
-
-	tlv_start += TLV_LEN_LEN;
-	if (value) {
-		*value = tlv_start;
-	}
-
-	return tlv_len + TLV_OVERHEAD;
-}
-
-
 
 #define DER_TAG_BITSTRING 0x03
 #define DER_TAG_OCTET_STRING 0x04
