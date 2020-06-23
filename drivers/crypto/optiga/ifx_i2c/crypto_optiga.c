@@ -26,6 +26,7 @@ LOG_MODULE_REGISTER(optiga, CONFIG_CRYPTO_LOG_LEVEL);
 #define OPTIGA_MAX_RESET 3
 #define OPTIGA_IGNORE_HIBERNATE_MASK BIT_MASK(OPTIGA_WAKE_LOCK_IGNORED_SESSIONS)
 
+// TODO(chr): rename to OPTIGA_PRES_STATE, because this is about presentation layer
 enum OPTIGA_SHIELD_STATE {
 	OPTIGA_SHIELD_DISABLED = 0,
 	OPTIGA_SHIELD_LOADING_KEY,
@@ -37,25 +38,12 @@ enum OPTIGA_SHIELD_STATE {
 static void optiga_worker(void *arg1, void *arg2, void *arg3);
 
 #define OPTIGA_GET_ERROR_RESPONSE_LEN 5
-/* GetDataObject command with a special data object storing the error code */
-static const uint8_t error_code_apdu[] =
-{
-	0x01,           /* get DataObject, don't clear error code because we want to read it */
-	0x00,           /* read data */
-	0x00, 0x06,     /* 6 bytes following */
-	0xF1, 0xC2,     /* Error codes object */
-	0x00, 0x00,     /* Offset */
-	0x00, 0x01,     /* all error codes are 1 byte */
-};
+
 
 #define OPTIGA_APDU_STA_OFFSET 0
 #define OPTIGA_APDU_STA_SUCCESS 0
 #define OPTIGA_APDU_OUT_DATA_OFFSET 4
 
-#define OPTIGA_OPEN_APPLICATION_RESPONSE_LEN 4
-
-#define OPTIGA_OPEN_APPLICATION_LEN 20
-#define OPTIGA_RESTORE_APPLICATION_LEN 28
 #define OPTIGA_PARAM_OFFS 1
 /* Only least significant byte */
 #define OPTIGA_LEN_OFFS 3
@@ -64,7 +52,6 @@ static const uint8_t error_code_apdu[] =
 int optiga_reset(struct device *dev)
 {
 	int err = optiga_phy_init(dev);
-
 	if (err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA phy layer");
 		return err;
@@ -82,7 +69,7 @@ int optiga_reset(struct device *dev)
 		return err;
 	}
 
-	err = optiga_pre_init(dev);
+	err = optiga_pres_init(dev);
 	if (err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA presentation layer");
 		return err;
@@ -98,10 +85,21 @@ static bool optiga_apdu_is_error(uint8_t *apdu_start)
 
 static int optiga_get_error_code(struct device *dev, uint8_t *err_code)
 {
+	/* GetDataObject command with a special data object storing the error code */
+	static const uint8_t error_code_apdu[] =
+	{
+		0x01,           /* get DataObject, don't clear error code because we want to read it */
+		0x00,           /* read data */
+		0x00, 0x06,     /* 6 bytes following */
+		0xF1, 0xC2,     /* Error codes object */
+		0x00, 0x00,     /* Offset */
+		0x00, 0x01,     /* all error codes are 1 byte */
+	};
+
 	__ASSERT(dev, "Invalid NULL pointer");
 	__ASSERT(err_code, "Invalid NULL pointer");
 
-	int err = optiga_pre_send_apdu(dev,
+	int err = optiga_pres_send_apdu(dev,
 				       error_code_apdu,
 				       sizeof(error_code_apdu));
 
@@ -114,7 +112,7 @@ static int optiga_get_error_code(struct device *dev, uint8_t *err_code)
 	size_t tmp_buf_len = OPTIGA_GET_ERROR_RESPONSE_LEN;
 
 
-	err = optiga_pre_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	err = optiga_pres_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get Error Code APDU response");
 		return err;
@@ -131,6 +129,7 @@ static int optiga_get_error_code(struct device *dev, uint8_t *err_code)
 		return -EIO;
 	}
 
+	// TODO(chr): remove magic numbers and replace with define/us sys_put_ functions from Zephyr
 	if (tmp_buf[2] != 0x00 || tmp_buf[3] != 0x01) {
 		LOG_ERR("Unexpected data length");
 		return -EIO;
@@ -141,25 +140,31 @@ static int optiga_get_error_code(struct device *dev, uint8_t *err_code)
 	return 0;
 }
 
-static const uint8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
-{
-	0xF0,           /* command code */
-	0x00,           /* Param */
-	0x00, 0x10,     /* 16 bytes parameter */
-	/* unique application identifier */
-	0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
-};
+#define OPTIGA_OPEN_APPLICATION_RESPONSE_LEN 4
 
+#define OPTIGA_APP_ID_LEN 16
+
+#define OPTIGA_OPEN_APPLICATION_LEN (OPTIGA_APDU_OUT_DATA_OFFSET + OPTIGA_APP_ID_LEN)
+#define OPTIGA_RESTORE_APPLICATION_LEN (OPTIGA_OPEN_APPLICATION_LEN + OPTIGA_CTX_HANDLE_LEN)
 /* Param value to restore application state from Hibernation */
 #define OPTIGA_OPEN_APP_PARAM_RESTORE 0x01
 /* Length value for restore command */
-#define OPTIGA_OPEN_APP_LENGTH (16 + OPTIGA_CTX_HANDLE_LEN)
+#define OPTIGA_OPEN_APP_LENGTH (OPTIGA_APP_ID_LEN + OPTIGA_CTX_HANDLE_LEN)
 
 /*
  * Initializes the application on the OPTIGA chip
  */
 static int optiga_open_application(struct device *dev, const uint8_t *handle)
 {
+	static const uint8_t optiga_open_application_apdu[OPTIGA_OPEN_APPLICATION_LEN] =
+	{
+		0xF0,           /* command code */
+		0x00,           /* Param */
+		0x00, OPTIGA_APP_ID_LEN,     /* 16 bytes parameter */
+		/* unique application identifier */
+		0xD2, 0x76, 0x00, 0x00, 0x04, 0x47, 0x65, 0x6E, 0x41, 0x75, 0x74, 0x68, 0x41, 0x70, 0x70, 0x6C,
+	};
+
 	uint8_t tmp_buf[OPTIGA_RESTORE_APPLICATION_LEN] = { 0 };
 	size_t tmp_buf_len = 0;
 	struct optiga_data *data = dev->driver_data;
@@ -180,7 +185,7 @@ static int optiga_open_application(struct device *dev, const uint8_t *handle)
 		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	}
 
-	int err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
+	int err = optiga_pres_send_apdu(dev, tmp_buf, tmp_buf_len);
 
 	if (err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
@@ -192,7 +197,7 @@ static int optiga_open_application(struct device *dev, const uint8_t *handle)
 	static const size_t resp_len = OPTIGA_OPEN_APPLICATION_RESPONSE_LEN;
 
 	tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
-	err = optiga_pre_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	err = optiga_pres_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
 		return err;
@@ -232,7 +237,7 @@ static int optiga_close_application(struct device *dev, uint8_t *handle)
 		tmp_buf[OPTIGA_PARAM_OFFS] = OPTIGA_CLOSE_APP_PARAM_HIBERNATE;
 	}
 
-	int err = optiga_pre_send_apdu(dev, tmp_buf, tmp_buf_len);
+	int err = optiga_pres_send_apdu(dev, tmp_buf, tmp_buf_len);
 
 	if (err != 0) {
 		LOG_ERR("Failed to send OpenApplication APDU");
@@ -240,7 +245,7 @@ static int optiga_close_application(struct device *dev, uint8_t *handle)
 	}
 
 	tmp_buf_len = OPTIGA_CTX_HANDLE_LEN + OPTIGA_APDU_OUT_DATA_OFFSET;
-	err = optiga_pre_recv_apdu(dev, tmp_buf, &tmp_buf_len);
+	err = optiga_pres_recv_apdu(dev, tmp_buf, &tmp_buf_len);
 	if (err != 0) {
 		LOG_INF("Failed to get OpenApplication APDU response");
 		return err;
@@ -299,15 +304,15 @@ int optiga_init(struct device *dev)
 
 	if (config->power_label == NULL) {
 		data->gpio = NULL;
+		/* Delay startup until OPTIGA is ready */
+		k_msleep(OPTIGA_STARTUP_TIME_MS);
 	} else {
 		data->gpio = device_get_binding(config->power_label);
 		if (data->gpio == NULL) {
 			LOG_ERR("Failed to get GPIO device");
 			return -EINVAL;
 		}
-	}
 
-	if (data->gpio) {
 		/* Initialize power pin */
 		gpio_pin_configure(data->gpio, config->power_pin,
 				   GPIO_OUTPUT | config->power_flags);
@@ -361,14 +366,14 @@ static int enqueue_apdu(struct device *dev, struct optiga_apdu *apdu)
 
 static int optiga_transfer_apdu(struct device *dev, struct optiga_apdu *apdu)
 {
-	int err = optiga_pre_send_apdu(dev,     apdu->tx_buf, apdu->tx_len);
+	int err = optiga_pres_send_apdu(dev, apdu->tx_buf, apdu->tx_len);
 
 	if (err != 0) {
 		LOG_ERR("Failed to send APDU");
 		return err;
 	}
 
-	err = optiga_pre_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
+	err = optiga_pres_recv_apdu(dev, apdu->rx_buf, &apdu->rx_len);
 	if (err != 0) {
 		LOG_ERR("Failed to receive APDU");
 		return err;
@@ -404,7 +409,7 @@ static void optiga_hibernate(struct device *dev)
 	}
 
 	if (atomic_get(&data->shield_state) == OPTIGA_SHIELD_ENABLED) {
-		res = optiga_pre_save_ctx(dev);
+		res = optiga_pres_save_ctx(dev);
 		if (res != 0) {
 			LOG_WRN("Couldn't save Shield state");
 			/* Need to re-handshake */
@@ -424,7 +429,6 @@ static void optiga_wakup(struct device *dev)
 
 	/* bring the protocol stack to a known state */
 	int err = optiga_phy_init(dev);
-
 	if (err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA phy layer");
 		return;
@@ -447,7 +451,7 @@ static void optiga_wakup(struct device *dev)
 
 	if (atomic_get(&data->shield_state) == OPTIGA_SHIELD_ENABLED) {
 		optiga_nettran_presence_enable(dev);
-		int res = optiga_pre_restore_ctx(dev);
+		int res = optiga_pres_restore_ctx(dev);
 		if (res != 0) {
 			LOG_WRN("Coulnd't restore Shield state");
 			atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
@@ -515,7 +519,8 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 
 			if (!data->open) {
 				/* Signal error to users and mark APDU as handled */
-				k_poll_signal_raise(&apdu->finished, err);
+				// TODO(chr): get error code of optiga_wakeup->open_application here
+				k_poll_signal_raise(&apdu->finished, -1);
 				apdu = NULL;
 
 				/* Couldn't wake OPTIGA, try reset */
@@ -533,7 +538,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 
 			/* Check if we need to execute the handshake for shielded connection*/
 			if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_HANDSHAKE)) {
-				err = optiga_pre_do_handshake(dev);
+				err = optiga_pres_do_handshake(dev);
 				if (err == 0) {
 					LOG_INF("Shielded Connection enabled");
 					atomic_set(&data->shield_state, OPTIGA_SHIELD_ENABLED);
@@ -566,7 +571,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 				data->reset_counter = 0;
 			}
 
-			if (optiga_nettran_presence_get(dev) && optiga_pre_need_rehandshake(dev)) {
+			if (optiga_nettran_presence_get(dev) && optiga_pres_need_rehandshake(dev)) {
 				if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED)) {
 					LOG_INF("Executing re-handshake");
 				}
@@ -589,7 +594,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 					break;
 				}
 
-				if (optiga_nettran_presence_get(dev) && optiga_pre_need_rehandshake(dev)) {
+				if (optiga_nettran_presence_get(dev) && optiga_pres_need_rehandshake(dev)) {
 					if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED)) {
 						LOG_INF("Executing re-handshake");
 					}
@@ -620,6 +625,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 				if (data->gpio) {
 					optiga_power(dev, false);
 				}
+
 				state = WORKER_RESET_LOCK;
 				break;
 			}
@@ -631,6 +637,9 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 			if (err != 0) {
 				/* If reset fails, something is seriously wrong */
 				LOG_ERR("Failed to reset protocol stack");
+
+				state = WORKER_RESET;
+				break;
 			}
 
 			if (err == 0) {
@@ -638,6 +647,9 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 				if (err != 0) {
 					/* If OpenApplication fails, something is seriously wrong */
 					LOG_ERR("Failed to do OpenApplication");
+
+					state = WORKER_RESET;
+					break;
 				}
 			}
 
@@ -690,10 +702,10 @@ static int start_shield(struct device *dev, const uint8_t *key, size_t key_len)
 {
 	struct optiga_data *data = dev->driver_data;
 	const bool prev_disabled = atomic_cas(&data->shield_state, OPTIGA_SHIELD_DISABLED, OPTIGA_SHIELD_LOADING_KEY);
-	const bool prev_loaded =  atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_LOADING_KEY);
+	const bool prev_loaded = atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_LOADING_KEY);
 
 	if (prev_disabled || prev_loaded) {
-		int res = optiga_pre_set_shared_secret(dev, key, key_len);
+		int res = optiga_pres_set_shared_secret(dev, key, key_len);
 		if (res != 0) {
 			/* Can only happen with invalid key */
 			LOG_ERR("Failed to set key: %d", res);

@@ -9,7 +9,7 @@
 
 #include "optiga_phy.h"
 #include "optiga_data.h"
-#include "optiga_pre.h"
+#include "optiga_pres.h"
 #include "optiga_nettran.h"
 
 #include <drivers/gpio.h>
