@@ -9,7 +9,9 @@
 #include <drivers/gpio.h>
 #include <drivers/i2c.h>
 #include <kernel.h>
+#include <sys/byteorder.h>
 #include <zephyr.h>
+
 #include <drivers/crypto/optiga_apdu.h>
 
 #include "crypto_optiga.h"
@@ -26,27 +28,25 @@ LOG_MODULE_REGISTER(optiga, CONFIG_CRYPTO_LOG_LEVEL);
 #define OPTIGA_MAX_RESET 3
 #define OPTIGA_IGNORE_HIBERNATE_MASK BIT_MASK(OPTIGA_WAKE_LOCK_IGNORED_SESSIONS)
 
-// TODO(chr): rename to OPTIGA_PRES_STATE, because this is about presentation layer
-enum OPTIGA_SHIELD_STATE {
-	OPTIGA_SHIELD_DISABLED = 0,
-	OPTIGA_SHIELD_LOADING_KEY,
-	OPTIGA_SHIELD_KEY_LOADED,
-	OPTIGA_SHIELD_HANDSHAKE,
-	OPTIGA_SHIELD_ENABLED,
+enum OPTIGA_PRES_STATE {
+	OPTIGA_PRES_DISABLED = 0,
+	OPTIGA_PRES_LOADING_KEY,
+	OPTIGA_PRES_KEY_LOADED,
+	OPTIGA_PRES_HANDSHAKE,
+	OPTIGA_PRES_ENABLED,
 };
 
 static void optiga_worker(void *arg1, void *arg2, void *arg3);
 
 #define OPTIGA_GET_ERROR_RESPONSE_LEN 5
 
-
 #define OPTIGA_APDU_STA_OFFSET 0
 #define OPTIGA_APDU_STA_SUCCESS 0
+#define OPTIGA_APDU_PARAM_OFFS 1
+#define OPTIGA_APDU_LEN_OFFS 2
 #define OPTIGA_APDU_OUT_DATA_OFFSET 4
 
-#define OPTIGA_PARAM_OFFS 1
-/* Only least significant byte */
-#define OPTIGA_LEN_OFFS 3
+
 
 /* Resets the state of the stack */
 int optiga_reset(struct device *dev)
@@ -129,8 +129,7 @@ static int optiga_get_error_code(struct device *dev, uint8_t *err_code)
 		return -EIO;
 	}
 
-	// TODO(chr): remove magic numbers and replace with define/us sys_put_ functions from Zephyr
-	if (tmp_buf[2] != 0x00 || tmp_buf[3] != 0x01) {
+	if (sys_get_be16(tmp_buf + OPTIGA_APDU_LEN_OFFS) != 1) {
 		LOG_ERR("Unexpected data length");
 		return -EIO;
 	}
@@ -179,8 +178,8 @@ static int optiga_open_application(struct device *dev, const uint8_t *handle)
 	if (handle == NULL) {
 		tmp_buf_len = OPTIGA_OPEN_APPLICATION_LEN;
 	} else {
-		tmp_buf[OPTIGA_PARAM_OFFS] = OPTIGA_OPEN_APP_PARAM_RESTORE;
-		tmp_buf[OPTIGA_LEN_OFFS] = OPTIGA_OPEN_APP_LENGTH;
+		tmp_buf[OPTIGA_APDU_PARAM_OFFS] = OPTIGA_OPEN_APP_PARAM_RESTORE;
+		sys_put_be16(OPTIGA_OPEN_APP_LENGTH, tmp_buf + OPTIGA_APDU_LEN_OFFS);
 		memcpy(tmp_buf + OPTIGA_OPEN_APPLICATION_LEN, handle, OPTIGA_CTX_HANDLE_LEN);
 		tmp_buf_len = OPTIGA_RESTORE_APPLICATION_LEN;
 	}
@@ -234,7 +233,7 @@ static int optiga_close_application(struct device *dev, uint8_t *handle)
 	tmp_buf_len = OPTIGA_CLOSE_APPLICATION_LEN;
 
 	if (handle != NULL) {
-		tmp_buf[OPTIGA_PARAM_OFFS] = OPTIGA_CLOSE_APP_PARAM_HIBERNATE;
+		tmp_buf[OPTIGA_APDU_PARAM_OFFS] = OPTIGA_CLOSE_APP_PARAM_HIBERNATE;
 	}
 
 	int err = optiga_pres_send_apdu(dev, tmp_buf, tmp_buf_len);
@@ -340,7 +339,7 @@ int optiga_init(struct device *dev)
 		return err;
 	}
 
-	atomic_set(&data->shield_state, OPTIGA_SHIELD_DISABLED);
+	atomic_set(&data->shield_state, OPTIGA_PRES_DISABLED);
 
 	k_fifo_init(&data->apdu_queue);
 
@@ -408,12 +407,12 @@ static void optiga_hibernate(struct device *dev)
 		return;
 	}
 
-	if (atomic_get(&data->shield_state) == OPTIGA_SHIELD_ENABLED) {
+	if (atomic_get(&data->shield_state) == OPTIGA_PRES_ENABLED) {
 		res = optiga_pres_save_ctx(dev);
 		if (res != 0) {
 			LOG_WRN("Couldn't save Shield state");
 			/* Need to re-handshake */
-			atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+			atomic_set(&data->shield_state, OPTIGA_PRES_KEY_LOADED);
 		}
 	}
 
@@ -421,7 +420,7 @@ static void optiga_hibernate(struct device *dev)
 }
 
 /* Wakes the OPTIGA from Hibernate mode */
-static void optiga_wakup(struct device *dev)
+static int optiga_wakup(struct device *dev)
 {
 	struct optiga_data *data = dev->driver_data;
 
@@ -431,30 +430,29 @@ static void optiga_wakup(struct device *dev)
 	int err = optiga_phy_init(dev);
 	if (err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA phy layer");
-		return;
+		return err;
 	}
 
 	err = optiga_data_init(dev);
 	if (err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA data link layer");
-		return;
+		return err;
 	}
 
-	// TODO(chr): possible to skip?
 	err = optiga_nettran_init(dev);
 	if (err != 0) {
 		LOG_ERR("Failed to initialise OPTIGA nettran layer");
-		return;
+		return err;
 	}
 
 	/* Don't re-init optiga_pre, to avoid loosing the keys */
 
-	if (atomic_get(&data->shield_state) == OPTIGA_SHIELD_ENABLED) {
+	if (atomic_get(&data->shield_state) == OPTIGA_PRES_ENABLED) {
 		optiga_nettran_presence_enable(dev);
 		int res = optiga_pres_restore_ctx(dev);
 		if (res != 0) {
 			LOG_WRN("Coulnd't restore Shield state");
-			atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+			atomic_set(&data->shield_state, OPTIGA_PRES_KEY_LOADED);
 		} else {
 			LOG_INF("Shield restored");
 		}
@@ -463,8 +461,7 @@ static void optiga_wakup(struct device *dev)
 	atomic_t reservations = atomic_get(&data->session_reservations);
 	bool restore_ctx = reservations & OPTIGA_IGNORE_HIBERNATE_MASK;
 
-	// TODO(chr): error handling
-	optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
+	return optiga_open_application(dev, restore_ctx ? data->hibernate_handle : NULL);
 }
 
 enum WORKER_STATE {
@@ -515,12 +512,11 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 			apdu = k_fifo_get(&data->apdu_queue, K_FOREVER);
 
 			/* Wake OPTIGA from hibernate to handle APDU */
-			optiga_wakup(dev);
+			err = optiga_wakup(dev);
 
-			if (!data->open) {
+			if (!data->open || err != 0) {
 				/* Signal error to users and mark APDU as handled */
-				// TODO(chr): get error code of optiga_wakeup->open_application here
-				k_poll_signal_raise(&apdu->finished, -1);
+				k_poll_signal_raise(&apdu->finished, err);
 				apdu = NULL;
 
 				/* Couldn't wake OPTIGA, try reset */
@@ -536,15 +532,15 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 			__ASSERT(apdu != NULL, "No APDU to process");
 			__ASSERT(data->open, "OPTIGA must be opened");
 
-			/* Check if we need to execute the handshake for shielded connection*/
-			if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_HANDSHAKE)) {
+			/* Check if we need to execute the handshake for shielded connection */
+			if (atomic_cas(&data->shield_state, OPTIGA_PRES_KEY_LOADED, OPTIGA_PRES_HANDSHAKE)) {
 				err = optiga_pres_do_handshake(dev);
 				if (err == 0) {
 					LOG_INF("Shielded Connection enabled");
-					atomic_set(&data->shield_state, OPTIGA_SHIELD_ENABLED);
+					atomic_set(&data->shield_state, OPTIGA_PRES_ENABLED);
 				} else {
 					LOG_ERR("Handshake failed: %d", err);
-					atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+					atomic_set(&data->shield_state, OPTIGA_PRES_KEY_LOADED);
 
 					/* Signal error to users and mark APDU as handled */
 					k_poll_signal_raise(&apdu->finished, -EIO);
@@ -572,7 +568,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 			}
 
 			if (optiga_nettran_presence_get(dev) && optiga_pres_need_rehandshake(dev)) {
-				if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED)) {
+				if (atomic_cas(&data->shield_state, OPTIGA_PRES_ENABLED, OPTIGA_PRES_KEY_LOADED)) {
 					LOG_INF("Executing re-handshake");
 				}
 			}
@@ -595,7 +591,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 				}
 
 				if (optiga_nettran_presence_get(dev) && optiga_pres_need_rehandshake(dev)) {
-					if (atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED)) {
+					if (atomic_cas(&data->shield_state, OPTIGA_PRES_ENABLED, OPTIGA_PRES_KEY_LOADED)) {
 						LOG_INF("Executing re-handshake");
 					}
 				}
@@ -663,7 +659,7 @@ static void optiga_worker(void *arg1, void *arg2, void *arg3)
 			}
 
 			/* If shielded connection was enabled, we need to re-handshake*/
-			atomic_cas(&data->shield_state, OPTIGA_SHIELD_ENABLED, OPTIGA_SHIELD_KEY_LOADED);
+			atomic_cas(&data->shield_state, OPTIGA_PRES_ENABLED, OPTIGA_PRES_KEY_LOADED);
 			state = WORKER_IDLE;
 			break;
 		case WORKER_RESET_LOCK:
@@ -701,8 +697,8 @@ static void session_release(struct device *dev, int session_idx)
 static int start_shield(struct device *dev, const uint8_t *key, size_t key_len)
 {
 	struct optiga_data *data = dev->driver_data;
-	const bool prev_disabled = atomic_cas(&data->shield_state, OPTIGA_SHIELD_DISABLED, OPTIGA_SHIELD_LOADING_KEY);
-	const bool prev_loaded = atomic_cas(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED, OPTIGA_SHIELD_LOADING_KEY);
+	const bool prev_disabled = atomic_cas(&data->shield_state, OPTIGA_PRES_DISABLED, OPTIGA_PRES_LOADING_KEY);
+	const bool prev_loaded = atomic_cas(&data->shield_state, OPTIGA_PRES_KEY_LOADED, OPTIGA_PRES_LOADING_KEY);
 
 	if (prev_disabled || prev_loaded) {
 		int res = optiga_pres_set_shared_secret(dev, key, key_len);
@@ -710,14 +706,14 @@ static int start_shield(struct device *dev, const uint8_t *key, size_t key_len)
 			/* Can only happen with invalid key */
 			LOG_ERR("Failed to set key: %d", res);
 			if (prev_disabled) {
-				atomic_set(&data->shield_state, OPTIGA_SHIELD_DISABLED);
+				atomic_set(&data->shield_state, OPTIGA_PRES_DISABLED);
 			} else {
-				atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+				atomic_set(&data->shield_state, OPTIGA_PRES_KEY_LOADED);
 			}
 			return res;
 		}
 
-		atomic_set(&data->shield_state, OPTIGA_SHIELD_KEY_LOADED);
+		atomic_set(&data->shield_state, OPTIGA_PRES_KEY_LOADED);
 		return 0;
 	}
 
