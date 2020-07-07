@@ -9,7 +9,9 @@
 
 #include "optiga_phy.h"
 #include "optiga_data.h"
+#if CONFIG_OPTIGA_SHIELDED_CONNECTION == 1
 #include "optiga_pres.h"
+#endif
 #include "optiga_nettran.h"
 
 #include <drivers/gpio.h>
@@ -23,13 +25,17 @@ struct optiga_data {
 	struct physical_layer phy;
 	struct data_link_layer data;
 	struct nettran_layer nettran;
+#if CONFIG_OPTIGA_SHIELDED_CONNECTION == 1
 	struct present_layer present;
+#endif
 	struct k_fifo apdu_queue;
 	struct k_thread worker;
 	k_thread_stack_t *worker_stack;
 	int reset_counter;
 	atomic_t session_reservations;
+#if CONFIG_OPTIGA_SHIELDED_CONNECTION == 1
 	atomic_t shield_state;
+#endif
 	uint8_t hibernate_handle[OPTIGA_CTX_HANDLE_LEN];
 	bool open;
 };

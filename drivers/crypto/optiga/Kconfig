@@ -28,4 +28,10 @@ config OPTIGA_THREAD_PRIORITY
 	int "Priority of the driver thread"
 	default 1
 
+config OPTIGA_SHIELDED_CONNECTION
+	bool "Enable encryption for I2C connection"
+	default y
+	select MBEDTLS
+	select MBEDTLS_CIPHER_CCM_ENABLED
+
 endif # OPTIGA

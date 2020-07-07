@@ -7,6 +7,8 @@
 #ifndef ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PRES_H_
 #define ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PRES_H_
 
+#if CONFIG_OPTIGA_SHIELDED_CONNECTION == 1
+
 #include <device.h>
 
 #include <mbedtls/ccm.h>
@@ -86,4 +88,5 @@ int optiga_pres_restore_ctx(struct device *dev);
 int optiga_pres_send_apdu(struct device *dev, const uint8_t *data, size_t len);
 int optiga_pres_recv_apdu(struct device *dev, uint8_t *data, size_t *len);
 
+#endif /* CONFIG_OPTIGA_SHIELDED_CONNECTION == 1 */
 #endif /* ZEPHYR_DRIVERS_CRYPTO_OPTIGA_OPTIGA_PRES_H_ */

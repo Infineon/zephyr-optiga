@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#if CONFIG_OPTIGA_SHIELDED_CONNECTION == 1
+
 #include "crypto_optiga.h"
 
 #include "optiga_pres.h"
@@ -847,3 +849,5 @@ bool optiga_pres_need_rehandshake(struct device *dev)
 
 	return optiga_pres_seq_max(mseq) || optiga_pres_seq_max(sseq);
 }
+
+#endif /* CONFIG_OPTIGA_SHIELDED_CONNECTION == 1 */
