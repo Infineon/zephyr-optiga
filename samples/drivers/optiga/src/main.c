@@ -7,9 +7,8 @@
 #include <zephyr.h>
 #include <drivers/crypto/optiga_trust_m.h>
 
-#define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(main);
+LOG_MODULE_REGISTER(main, CONFIG_LOG_DEFAULT_LEVEL);
 struct device *dev = NULL;
 
 /* APDU buffer for the command library */
@@ -146,7 +145,6 @@ static void example_ecc()
 	LOG_INF("ECDSA Verify: %s", res == 0 ? "PASS" : "FAIL");
 }
 
-
 /*
  * In this example, the complete flow of an ECC signature operation when the key is
  * used only temporarlily is described.
@@ -220,8 +218,9 @@ static void example_power()
 void main(void)
 {
 	LOG_INF("Hello OPTIGA");
-	dev = device_get_binding("trust-m");
 
+	/* Find device in DeviceTree */
+	dev = device_get_binding("trust-m");
 	if (dev == NULL) {
 		LOG_INF("Could not get Trust M device\n");
 		return;
@@ -234,7 +233,7 @@ void main(void)
 	/* Initialize the command library */
 	int res = optrust_init(&ctx, dev, apdu_buf, OPTRUST_CERT_READ_APDU_SIZE);
 
-	LOG_INF("ifx_optiga_trust_init res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
+	LOG_INF("optrust_init res: %d, took %dms", res, (int) k_uptime_delta(&start_time));
 
 	uint8_t coprocessor_uid[OPTRUST_COPROCESSOR_UID_LEN] = { 0 };
 	size_t coprocessor_uid_len = OPTRUST_COPROCESSOR_UID_LEN;
