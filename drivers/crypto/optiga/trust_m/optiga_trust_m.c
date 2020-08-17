@@ -67,6 +67,8 @@ enum OPTIGA_TRUSTM_SET_DATA_OBJECT {
 #define DER_BITSTRING_OVERHEAD 3
 /* DER BITSTRING encoding overhead  + Compressed point marker */
 #define DER_BITSTRING_PK_OVERHEAD (DER_BITSTRING_OVERHEAD + 1)
+/* Compressed point marker for ECC keys */
+#define DER_BITSTRING_COMPRESSED_POINT_MARKER 0x04
 /* For encoding length in a single byte */
 #define DER_LENGTH_SINGLE_MAX 127
 /* Tag + Length + Stuffing byte */
@@ -107,13 +109,68 @@ static size_t set_pub_key_as_bitstring(uint8_t *buf, size_t buf_len, const uint8
 	buf++;
 
 	/* Compressed point marker */
-	*buf = 0x04;
+	*buf = DER_BITSTRING_COMPRESSED_POINT_MARKER;
 	buf++;
 
 	/* actual data */
 	memcpy(buf, pub_key, pub_key_len);
 	return pub_key_len + DER_BITSTRING_PK_OVERHEAD;
 }
+
+/**
+ * @brief Extracts a public key from ASN.1 DER encoded data
+ * @param buf Buffer with the ASN.1 data
+ * @param buf_len Length of buf
+ * @param pub_key Buffer for the extracted public key
+ * @param pub_key_len Expected length of the public key
+ * @return 0 on success, error code otherwise
+ * @note This
+ */
+static int get_pub_key_from_bitstring(uint8_t *buf, size_t buf_len, uint8_t *pub_key, size_t pub_key_len)
+{
+	/* Validate length */
+	if (buf_len != (DER_BITSTRING_PK_OVERHEAD + pub_key_len)) {
+		/* Not enough data for pub key */
+		return -EIO;
+	}
+
+	if (DER_LENGTH_SINGLE_MAX < (pub_key_len + 2)) {
+		/* Only single byte length encoding is supported */
+		return -EIO;
+	}
+
+	/* Verify Tag byte */
+	if (*buf != DER_TAG_BITSTRING) {
+		/* Not an DER BIT STRING */
+		return -EIO;
+	}
+
+	/* Verify length field */
+	buf++;
+	if (*buf != (pub_key_len + 2)) {
+		/* Length mismatch */
+		return -EIO;
+	}
+
+	buf++;
+	if (*buf != 0) {
+		/* "Unused bits\" encoding not supported */
+		return -EIO;
+	}
+
+	/* Only compressed points are supported here */
+	buf++;
+	if (*buf != DER_BITSTRING_COMPRESSED_POINT_MARKER) {
+		/* Not a compressed point */
+		return -EIO;
+	}
+
+	buf++;
+	memcpy(pub_key, buf, pub_key_len);
+
+	return 0;
+}
+
 
 static size_t cmds_set_apdu_header(uint8_t *apdu_start, enum OPTIGA_TRUSTM_CMD cmd, uint8_t param, uint16_t in_len)
 {
@@ -136,7 +193,6 @@ static size_t cmds_get_apdu_header(const uint8_t *apdu_start, uint8_t *sta, uint
 	return OPTIGA_TRUSTM_IN_DATA_OFFSET;
 }
 
-
 int optrust_init(struct optrust_ctx *ctx, struct device *dev, uint8_t *apdu_buf, size_t apdu_buf_len)
 {
 	__ASSERT(ctx != NULL && dev != NULL && apdu_buf != NULL, "No NULL parameters allowed");
@@ -156,7 +212,7 @@ static int cmds_submit_apdu(struct optrust_ctx *ctx, const uint8_t *apdu_end, en
 {
 	const uint8_t *apdu_start = ctx->apdu_buf;
 
-	__ASSERT((apdu_start + OPTIGA_TRUSTM_IN_DATA_OFFSET)  <= apdu_end, "Invalid apdu_end pointer");
+	__ASSERT((apdu_start + OPTIGA_TRUSTM_IN_DATA_OFFSET) <= apdu_end, "Invalid apdu_end pointer");
 
 	const size_t in_data_len = apdu_end - apdu_start - OPTIGA_TRUSTM_IN_DATA_OFFSET;
 
@@ -1003,24 +1059,31 @@ int optrust_ecc_gen_keys_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST
 	}
 
 	uint8_t *out_data = NULL;
-	size_t out_data_len = 0;
+	size_t out_len = 0;
 
-	int res = optrust_int_gen_keys_oid(ctx, oid, alg, key_usage, &out_data, &out_data_len);
+	int res = optrust_int_gen_keys_oid(ctx, oid, alg, key_usage, &out_data, &out_len);
 
 	if (res != 0) {
 		return res;
 	}
 
-	__ASSERT(out_data[0] == 0x02, "Received Key not a pub key");
+	uint8_t tag = 0;
+	uint16_t len = 0;
+	uint8_t *pub_key_buf = NULL;
 
-	// TODO(chr): decide if we can skip ASN.1 decoding
-	/* the following decoding routine only works if the public key has a fixed length */
-	__ASSERT(out_data_len == (*pub_key_len + 7), "Assumption about pub key encoding was wrong");
-	out_data += 3;  // skip tag and length
-	out_data += 4;  // skip ASN.1 tag, length and 2 value bytes
-	memcpy(pub_key, out_data, *pub_key_len);
+	/* Parse secret key */
+	size_t tlv_res = get_tlv(out_data, out_len, &tag, &len, &pub_key_buf);
+	if (tlv_res == 0) {
+		/* Failed to parse TLV data structure */
+		return -EIO;
+	}
 
-	return 0;
+	if (tag != 0x02) {
+		/* Received Key not a pub key */
+		return -EIO;
+	}
+
+	return get_pub_key_from_bitstring(pub_key_buf, len, pub_key, *pub_key_len);
 }
 
 static int optrust_int_gen_keys_ext(struct optrust_ctx *ctx,
@@ -1177,21 +1240,7 @@ int optrust_ecc_gen_keys_ext(struct optrust_ctx *ctx,
 
 	/* Public key is encoded as DER BIT STRING */
 
-	/* ASN.1 encoding overhead are 4 bytes */
-	if (pub_key_asn1_len != (*pub_key_len + 4)) {
-		/* Unexpected length */
-		return -EIO;
-	}
-
-	__ASSERT(pub_key_asn1[0] == 0x03, "Not an DER BIT STRING");
-	__ASSERT(pub_key_asn1[1] == (*pub_key_len + 2), "Length mismatch");
-	__ASSERT(pub_key_asn1[2] == 0, "Unused bits encoding not supported");
-	__ASSERT(pub_key_asn1[3] == 0x04, "Not a compressed point");
-
-	pub_key_asn1 += 4; /* 1 byte TAG, 1 byte Length, 1 byte for unused bits, 1 for "compressed point" indicator */
-	memcpy(pub_key, pub_key_asn1, *pub_key_len);
-
-	return 0;
+	return get_pub_key_from_bitstring(pub_key_asn1, pub_key_asn1_len, pub_key, *pub_key_len);
 }
 
 /* Tags for CalcHash command, see Table 16 */
