@@ -343,19 +343,24 @@ int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 	uint8_t *rx_data_buf = NULL;
 
 	int res = optiga_data_recv_common(dev, &rx_data_buf, &rx_data_len);
-
 	if (res != 0) {
 		return res;
 	}
 
-	bool ctrl_frame = optiga_data_is_ctrl_frame(rx_data_buf);
-	uint16_t frame_len = optiga_data_frame_get_len(rx_data_buf);
-
-	__ASSERT(ctrl_frame == false, "Unexpected control frame");
+	const bool ctrl_frame = optiga_data_is_ctrl_frame(rx_data_buf);
+	if (ctrl_frame) {
+		LOG_ERR("Unexpected control frame");
+		return -EIO;
+	}
 
 	LOG_DBG("Data frame");
-	/* Ensure frame lenght matches */
-	__ASSERT((frame_len + DATA_LINK_OVERHEAD) == rx_data_len, "Invalid frame length");
+	/* Ensure frame length matches */
+	const uint16_t frame_len = optiga_data_frame_get_len(rx_data_buf);
+	if ((frame_len + DATA_LINK_OVERHEAD) != rx_data_len) {
+		LOG_ERR("Invalid frame length");
+		return -EIO;
+	}
+
 	*data_len = frame_len;
 
 	/* Acknowledge this frame */
