@@ -13,9 +13,8 @@
 #include "ecdsa_utils.h"
 #include "tlv_utils.h"
 
-#define LOG_LEVEL CONFIG_CRYPTO_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(cmds_m);
+LOG_MODULE_REGISTER(cmds_m, CONFIG_CRYPTO_LOG_LEVEL);
 
 enum OPTIGA_TRUSTM_CMD {
 	OPTIGA_TRUSTM_CMD_GET_DATA_OBJECT       = 0x81,
