@@ -230,7 +230,7 @@ static int optiga_get_data_reg_len(struct device *dev, uint16_t *data_reg_len)
 	return 0;
 }
 
-int optiga_negotiate_data_reg_len(struct device *dev)
+static int optiga_negotiate_data_reg_len(struct device *dev)
 {
 	/* read the value from the device */
 	uint16_t data_reg_len = 0;
