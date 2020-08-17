@@ -311,16 +311,6 @@ int optiga_phy_init(struct device *dev)
 		return err;
 	}
 
-	/* print the state of the device */
-	uint16_t read_len = 0;
-	uint8_t flags = 0;
-
-	err = optiga_phy_get_i2c_state(dev, &read_len, &flags);
-	if (err != 0) {
-		LOG_ERR("Failed to read I2C_STATE");
-		return err;
-	}
-
 	return 0;
 }
 
