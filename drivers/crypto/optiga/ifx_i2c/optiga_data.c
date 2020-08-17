@@ -169,28 +169,6 @@ static uint8_t optiga_data_get_ack_nr(const uint8_t *frame_start)
 	return frame_start[OPTIGA_DATA_FCTR_OFFSET] & OPTIGA_DATA_FCTR_ACKNR_MASK;
 }
 
-/*
- * @brief Send a sync frame to the device
- * @param dev The device to send the sync frame to
- * @return 0 on success, error code otherwise
- *
- * A sync frame resets the sequence counters on host and device
- */
-static int optiga_send_sync_frame(struct device *dev)
-{
-	size_t buf_len = 0;
-	uint8_t *frame = optiga_phy_frame_buf(dev, &buf_len);
-
-	__ASSERT(buf_len >= OPTIGA_DATA_CRTL_FRAME_LEN, "Send buffer too small for SYNC frame");
-
-	/* Assemble frame data */
-	optiga_data_frame_set_fctr(frame, OPTIGA_DATA_FCTR_FTYPE_CTRL | OPTIGA_DATA_FCTR_SEQCTR_RST, 0, 0);
-	optiga_data_frame_set_len(frame, 0);
-	optiga_data_frame_set_fcs(frame, OPTIGA_DATA_PAYLOAD_OFFSET);
-
-	return optiga_phy_write_frame(dev, OPTIGA_DATA_CRTL_FRAME_LEN);
-}
-
 static int optiga_send_ack_frame(struct device *dev)
 {
 	size_t buf_len = 0;
@@ -221,7 +199,7 @@ static int optiga_send_ack_frame(struct device *dev)
 	return err;
 }
 
-int optiga_data_is_ctrl_frame_available(struct device *dev)
+static int optiga_data_is_ctrl_frame_available(struct device *dev)
 {
 	uint16_t read_len = 0;
 	int res = optiga_phy_get_i2c_state(dev, &read_len, NULL);
@@ -389,13 +367,7 @@ int optiga_data_recv_packet(struct device *dev, size_t *data_len)
 
 int optiga_data_init(struct device *dev)
 {
-	/* Bring to a known state */
-	int err = optiga_send_sync_frame(dev);
-
-	if (err != 0) {
-		LOG_ERR("Failed to send sync frame");
-		return err;
-	}
+	/* OPTIGA should be in synchronized state after reset */
 
 	struct optiga_data *driver = dev->driver_data;
 
