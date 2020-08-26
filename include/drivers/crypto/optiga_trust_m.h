@@ -160,7 +160,6 @@ int optrust_wake_lock_acquire(struct optrust_ctx *ctx, int *token);
  * @brief Return a wake-lock token
  * @param ctx Context to use
  * @param token Wake-lock token to release
- * @return 0 on success, error code otherwise
  */
 void optrust_wake_lock_release(struct optrust_ctx *ctx, int token);
 
@@ -227,6 +226,35 @@ int optrust_data_protected_update(struct optrust_ctx *ctx, const uint8_t *manife
  * @return 0 on success, error code otherwise
  */
 int optrust_data_set(struct optrust_ctx *ctx, uint16_t oid, bool erase, size_t offs, const uint8_t *buf, size_t len);
+
+/**
+ * @brief Read metadata from a data object
+ * @param ctx Command context to use
+ * @param oid OID of the data object
+ * @param data Output buffer for the data object
+ * @param data_len Length of the output buffer, contains length of metadata afterwards
+ * @return 0 on success, error code otherwise
+ */
+int optrust_metadata_get(struct optrust_ctx *ctx, uint16_t oid, uint8_t *data, size_t *data_len);
+
+/**
+ * @brief Set metadata of a data object
+ * @param ctx Command context to use
+ * @param oid OID of the data object
+ * @param data metadata to write
+ * @param data_len length of data
+ * @return 0 on success, error code otherwise
+ */
+int optrust_metadata_set(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *data, size_t data_len);
+
+/**
+ * @brief Increment a monotonic counter
+ * @param ctx Command context to use
+ * @param oid OID of the monotonic counter
+ * @param inc Value by which to increment the counter
+ * @return 0 on success, error code otherwise
+ */
+int optrust_counter_inc(struct optrust_ctx *ctx, uint16_t oid, uint8_t inc);
 
 #define OPTRUST_NIST_P256_SEC_KEY_LEN 32
 #define OPTRUST_NIST_P384_SEC_KEY_LEN 48
@@ -330,33 +358,6 @@ int optrust_ecdsa_verify_ext(struct optrust_ctx *ctx, enum OPTRUST_ALGORITHM alg
  */
 int optrust_ecdsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *digest, size_t digest_len, const uint8_t *signature, size_t signature_len);
 
-enum OPTRUST_RNG_TYPE {
-	OPTRUST_RNG_TYPE_TRNG	= 0x00,
-	OPTRUST_RNG_TYPE_DRNG	= 0x01,
-};
-
-/**
- * @brief Generate random bytes
- * @param ctx Command context to use
- * @param type Type of the RNG to use
- * @param rnd Output buffer for the random bytes
- * @param rnd_len Size of the output buffer
- * @return 0 on success, error code otherwise
- */
-int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, uint8_t *rnd, size_t rnd_len);
-
-/**
- * @brief Generate random bytes and store them in an OID
- * @param ctx Command context to use
- * @param rnd_len Number of random bytes to generate
- * @param prepend Data to prepend to random data, may be NULL
- * @param prepend_len Length of prepend, may be 0
- * @return 0 on success, error code otherwise
- *
- * @note This function is intended to generate a Pre-Master Secret and limited in its functionality. See "Table 12 - GetRandom Coding" for details.
- */
-int optrust_rng_gen_oid(struct optrust_ctx *ctx, uint16_t oid, size_t rnd_len, const uint8_t *prepend, size_t prepend_len);
-
 #define OPTRUST_ECDH_SHARED_SECRET_NIST_P256_LEN 32
 #define OPTRUST_ECDH_SHARED_SECRET_NIST_P384_LEN 48
 
@@ -393,6 +394,33 @@ int optrust_ecdh_calc_oid(struct optrust_ctx *ctx, uint16_t sec_key_oid,
 				const uint8_t *pub_key, size_t pub_key_len,
 				uint16_t shared_secret_oid);
 
+enum OPTRUST_RNG_TYPE {
+	OPTRUST_RNG_TYPE_TRNG	= 0x00,
+	OPTRUST_RNG_TYPE_DRNG	= 0x01,
+};
+
+/**
+ * @brief Generate random bytes
+ * @param ctx Command context to use
+ * @param type Type of the RNG to use
+ * @param rnd Output buffer for the random bytes
+ * @param rnd_len Size of the output buffer
+ * @return 0 on success, error code otherwise
+ */
+int optrust_rng_gen_ext(struct optrust_ctx *ctx, enum OPTRUST_RNG_TYPE type, uint8_t *rnd, size_t rnd_len);
+
+/**
+ * @brief Generate random bytes and store them in an OID
+ * @param ctx Command context to use
+ * @param rnd_len Number of random bytes to generate
+ * @param prepend Data to prepend to random data, may be NULL
+ * @param prepend_len Length of prepend, may be 0
+ * @return 0 on success, error code otherwise
+ *
+ * @note This function is intended to generate a Pre-Master Secret and limited in its functionality. See "Table 12 - GetRandom Coding" for details.
+ */
+int optrust_rng_gen_oid(struct optrust_ctx *ctx, uint16_t oid, size_t rnd_len, const uint8_t *prepend, size_t prepend_len);
+
 #define OPTRUST_SHA256_DIGEST_LEN 32
 
 /**
@@ -422,36 +450,6 @@ int optrust_sha256_ext(struct optrust_ctx *ctx, const uint8_t* data, size_t data
 int optrust_sha256_oid(struct optrust_ctx *ctx,
 				uint16_t oid, size_t offs, size_t len,
 				uint8_t *digest, size_t *digest_len);
-
-
-/**
- * @brief Read metadata from a data object
- * @param ctx Command context to use
- * @param oid OID of the data object
- * @param data Output buffer for the data object
- * @param data_len Length of the output buffer, contains length of metadata afterwards
- * @return 0 on success, error code otherwise
- */
-int optrust_metadata_get(struct optrust_ctx *ctx, uint16_t oid, uint8_t *data, size_t *data_len);
-
-/**
- * @brief Set metadata of a data object
- * @param ctx Command context to use
- * @param oid OID of the data object
- * @param data metadata to write
- * @param data_len length of data
- * @return 0 on success, error code otherwise
- */
-int optrust_metadata_set(struct optrust_ctx *ctx, uint16_t oid, const uint8_t *data, size_t data_len);
-
-/**
- * @brief Increment a monotonic counter
- * @param ctx Command context to use
- * @param oid OID of the monotonic counter
- * @param inc Value by which to increment the counter
- * @return 0 on success, error code otherwise
- */
-int optrust_counter_inc(struct optrust_ctx *ctx, uint16_t oid, uint8_t inc);
 
 /* See Table 26 - Signature Schemes for more information */
 enum OPTRUST_SIGNATURE_SCHEME {
@@ -547,34 +545,6 @@ int optrust_rsa_verify_oid(struct optrust_ctx *ctx, uint16_t oid, enum OPTRUST_S
 				const uint8_t *digest, size_t digest_len, const uint8_t *signature, size_t signature_len);
 
 /**
- * @brief Derive a key from a shared secret
- *
- * @param ctx Command context to use
- * @param sec_oid Object ID of the shared secret to use
- * @param deriv_data Secret derivation data
- * @param deriv_data_len Length of deriv_data
- * @param key_len Length of the key to derive
- * @param key_oid OID to store the derived key
- * @return 0 if the signature matches, error code otherwise
- */
-int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
-				size_t key_len, uint16_t key_oid);
-
-/**
- * @brief Derive a key from a shared secret and export the key
- *
- * @param ctx Command context to use
- * @param sec_oid Object ID of the shared secret to use
- * @param deriv_data Secret derivation data
- * @param deriv_data_len Length of deriv_data
- * @param key Output buffer for the derived key
- * @param key_len Length of deriv and length of the secret to derive
- * @return 0 if the signature matches, error code otherwise
- */
-int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
-				uint8_t *key, size_t key_len);
-
-/**
  * @brief Encrypt data using a public RSA key
  *
  * @param ctx Command context to use
@@ -664,5 +634,33 @@ int optrust_rsa_decrypt_msg_oid(struct optrust_ctx *ctx, const uint8_t *msg, siz
  */
 int optrust_rsa_decrypt_oid_oid(struct optrust_ctx *ctx, const uint8_t *msg, size_t msg_len,
 				uint16_t key_oid,	uint16_t dec_oid);
+
+/**
+ * @brief Derive a key from a shared secret
+ *
+ * @param ctx Command context to use
+ * @param sec_oid Object ID of the shared secret to use
+ * @param deriv_data Secret derivation data
+ * @param deriv_data_len Length of deriv_data
+ * @param key_len Length of the key to derive
+ * @param key_oid OID to store the derived key
+ * @return 0 if the signature matches, error code otherwise
+ */
+int optrust_tls1_2_prf_sha256_calc_oid(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
+				size_t key_len, uint16_t key_oid);
+
+/**
+ * @brief Derive a key from a shared secret and export the key
+ *
+ * @param ctx Command context to use
+ * @param sec_oid Object ID of the shared secret to use
+ * @param deriv_data Secret derivation data
+ * @param deriv_data_len Length of deriv_data
+ * @param key Output buffer for the derived key
+ * @param key_len Length of deriv and length of the secret to derive
+ * @return 0 if the signature matches, error code otherwise
+ */
+int optrust_tls1_2_prf_sha256_calc_ext(struct optrust_ctx *ctx, uint16_t sec_oid, const uint8_t *deriv_data, size_t deriv_data_len,
+				uint8_t *key, size_t key_len);
 
 #endif /* ZEPHYR_INCLUDE_DRIVERS_CRYPTO_OPTIGA_TRUST_M_H_ */
