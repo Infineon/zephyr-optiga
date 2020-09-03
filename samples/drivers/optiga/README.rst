@@ -16,8 +16,16 @@ Hardware
 
 Connect an OPTIGA Trust M Shield2Go (`Pinout`_) to the Arduino I2C interface of
 your board. Additionally connect `VCC CTRL` with a GPIO pin of your board and
-configure it as ``power-gpios`` in the ``app.overlay`` file. An example for the
-Trust M Shield2Go on the MyIoT adapter board is provided.
+configure it as `power-gpios` in the `app.overlay` file. An example for the
+Trust M Shield2Go and the nrf52840dk_nrf52840 can be seen below. Further
+pin configurations are shown in the `app.overlay` file.
+
+.. figure:: ./schematic_96dpi.png
+     :width: 442px
+     :align: center
+     :alt: nRF52840 DK
+
+     Connection diagram for Trust M and nrf52840dk_nrf52840
 
 
 Building and Running
