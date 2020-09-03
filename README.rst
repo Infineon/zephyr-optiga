@@ -1,3 +1,10 @@
+IMPORTANT
+*********
+
+This is an experimental fork of the Zephyr source code, read about the details
+in our wiki: https://github.com/Infineon/zephyr/wiki
+
+
 .. raw:: html
 
    <a href="https://www.zephyrproject.org">
