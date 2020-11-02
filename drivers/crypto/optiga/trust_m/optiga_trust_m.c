@@ -499,8 +499,23 @@ int optrust_metadata_get(struct optrust_ctx *ctx, uint16_t oid, uint8_t *buf, si
 		return -EIO;
 	}
 
-	/* No response data expected */
-	return cmds_check_apdu_empty(ctx);
+	/* Parse response */
+	uint16_t out_len = 0;
+	const uint8_t *out_data = cmds_check_apdu(ctx, &out_len);
+
+	if (out_data == NULL) {
+		/* Invalid APDU */
+		return -EIO;
+	}
+
+	if (out_len > *len) {
+		/* Output buffer too small */
+		return -ENOMEM;
+	}
+
+	memcpy(buf, out_data, out_len);
+	*len = out_len;
+	return 0;
 }
 
 static int optrust_int_data_set(struct optrust_ctx *ctx, enum OPTIGA_TRUSTM_SET_DATA_OBJECT param, uint16_t oid, size_t offs, const uint8_t *data, size_t len)
