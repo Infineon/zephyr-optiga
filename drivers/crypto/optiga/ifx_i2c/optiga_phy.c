@@ -210,7 +210,7 @@ static int optiga_set_data_reg_len(struct device *dev, uint16_t data_reg_len)
 	uint8_t *tx_buf = optiga_phy_frame_buf(dev, NULL);
 
 	sys_put_be16(data_reg_len, tx_buf);
-	return optiga_reg_write(dev, OPTIGA_REG_ADDR_SOFT_RESET, sizeof(uint16_t));
+	return optiga_reg_write(dev, OPTIGA_REG_ADDR_DATA_REG_LEN, sizeof(uint16_t));
 }
 
 static int optiga_get_data_reg_len(struct device *dev, uint16_t *data_reg_len)
